@@ -25,12 +25,6 @@ export function activate(context: vscode.ExtensionContext): void {
   void refresh();
 
   context.subscriptions.push(
-    vscode.lm.onDidChangeChatModels(async () => {
-      console.log("Chat models changed, refreshing providers...");
-    }),
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand(CONFIG_COMMAND, async () => {
       await quickPickManager.showAddProvider();
       await refresh();
