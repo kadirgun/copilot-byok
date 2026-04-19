@@ -8,12 +8,27 @@ export function activate(context: vscode.ExtensionContext): void {
   const configManager = new ConfigManager(context);
   const quickPickManager = new QuickPickManager(context, configManager);
   const mainProvider = new MainProvider([], context);
+  const emitter = new vscode.EventEmitter<void>();
 
-  vscode.lm.registerLanguageModelChatProvider(PROVIDER_VENDOR_ID, mainProvider);
+  vscode.lm.registerLanguageModelChatProvider(PROVIDER_VENDOR_ID, {
+    onDidChangeLanguageModelChatInformation: emitter.event,
+    provideLanguageModelChatInformation: mainProvider.provideLanguageModelChatInformation.bind(mainProvider),
+    provideLanguageModelChatResponse: mainProvider.provideLanguageModelChatResponse.bind(mainProvider),
+    provideTokenCount: mainProvider.provideTokenCount.bind(mainProvider),
+  });
 
   const refresh = async (): Promise<void> => {
-    mainProvider.reload(await configManager.loadProviders());
+    await mainProvider.reload(await configManager.loadProviders());
+    emitter.fire();
   };
+
+  void refresh();
+
+  context.subscriptions.push(
+    vscode.lm.onDidChangeChatModels(async () => {
+      console.log("Chat models changed, refreshing providers...");
+    }),
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand(CONFIG_COMMAND, async () => {

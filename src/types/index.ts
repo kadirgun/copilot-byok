@@ -26,3 +26,9 @@ export function createLanguageModelError(message: string, code: string, _cause?:
   // @ts-expect-error - VS Code API farklı sürümlerde değişebilir
   return vscode.LanguageModelError.create(message, code);
 }
+
+declare module "vscode" {
+  interface LanguageModelChatInformation {
+    isUserSelectable?: boolean;
+  }
+}

@@ -12,25 +12,26 @@ export class OpenAIProvider extends BaseProvider {
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      return [];
+    const models: vscode.LanguageModelChatInformation[] = [];
+
+    for (const modelId of this.config.models) {
+      models.push({
+        id: modelId,
+        name: modelId,
+        family: modelId,
+        detail: this.config.name,
+        version: "1.0.0",
+        maxInputTokens: 128000,
+        maxOutputTokens: 16384,
+        isUserSelectable: true,
+        capabilities: {
+          imageInput: true,
+          toolCalling: true,
+        },
+      });
     }
 
-    return this.config.models.map((modelId) => ({
-      id: modelId,
-      name: modelId,
-      family: modelId,
-      group: "test",
-      detail: "Test xxx",
-      version: "1.0.0",
-      maxInputTokens: 128000,
-      maxOutputTokens: 16384,
-      capabilities: {
-        imageInput: true,
-        toolCalling: true,
-      },
-    }));
+    return models;
   }
 
   async provideLanguageModelChatResponse(

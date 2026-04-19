@@ -1,22 +1,12 @@
 import * as vscode from "vscode";
 import type { ProviderConfig } from "../types";
+import type { ConfigManager } from "./manager";
 
 export class QuickPickManager {
   private context: vscode.ExtensionContext;
-  private configManager: {
-    loadProviders: () => Promise<ProviderConfig[]>;
-    saveProvider: (provider: ProviderConfig) => Promise<void>;
-    deleteProvider: (providerId: string) => Promise<void>;
-  };
+  private configManager: ConfigManager;
 
-  constructor(
-    context: vscode.ExtensionContext,
-    configManager: {
-      loadProviders: () => Promise<ProviderConfig[]>;
-      saveProvider: (provider: ProviderConfig) => Promise<void>;
-      deleteProvider: (providerId: string) => Promise<void>;
-    },
-  ) {
+  constructor(context: vscode.ExtensionContext, configManager: ConfigManager) {
     this.context = context;
     this.configManager = configManager;
   }
@@ -30,7 +20,9 @@ export class QuickPickManager {
       { placeHolder: "Select provider type" },
     );
 
-    if (!type) return undefined;
+    if (!type) {
+      return undefined;
+    }
 
     const name = await vscode.window.showInputBox({
       placeHolder: "Provider name",
@@ -39,7 +31,9 @@ export class QuickPickManager {
       ignoreFocusOut: true,
     });
 
-    if (!name) return undefined;
+    if (!name) {
+      return undefined;
+    }
 
     const apiKey = await vscode.window.showInputBox({
       placeHolder: "sk-...",
@@ -92,7 +86,9 @@ export class QuickPickManager {
       { placeHolder: "Select provider to edit" },
     );
 
-    if (!selected) return;
+    if (!selected) {
+      return;
+    }
 
     const provider = selected.provider;
 
@@ -103,7 +99,9 @@ export class QuickPickManager {
       ignoreFocusOut: true,
     });
 
-    if (name === undefined) return;
+    if (name === undefined) {
+      return;
+    }
 
     const apiKeyAction = await vscode.window.showQuickPick(
       [
@@ -114,7 +112,9 @@ export class QuickPickManager {
       { placeHolder: "Select API key action" },
     );
 
-    if (!apiKeyAction) return;
+    if (!apiKeyAction) {
+      return;
+    }
 
     let newApiKey: string | undefined;
     if (apiKeyAction.value === "update") {
@@ -123,7 +123,9 @@ export class QuickPickManager {
         prompt: "Enter new API key",
         ignoreFocusOut: true,
       });
-      if (!newApiKey) return;
+      if (!newApiKey) {
+        return;
+      }
     }
 
     const baseURL = await vscode.window.showInputBox({
@@ -141,7 +143,9 @@ export class QuickPickManager {
       { placeHolder: "Enable/disable provider" },
     );
 
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
 
     if (apiKeyAction.value === "delete") {
       if (provider.apiKeySecretKey) {
@@ -180,7 +184,9 @@ export class QuickPickManager {
       { placeHolder: "Select provider to delete" },
     );
 
-    if (!selected) return undefined;
+    if (!selected) {
+      return undefined;
+    }
 
     const confirmed = await vscode.window.showWarningMessage(
       `Delete "${selected.provider.name}"?`,
@@ -189,7 +195,9 @@ export class QuickPickManager {
       "Cancel",
     );
 
-    if (confirmed !== "Delete") return undefined;
+    if (confirmed !== "Delete") {
+      return undefined;
+    }
 
     const deletedName = selected.provider.name;
     if (selected.provider.apiKeySecretKey) {
@@ -216,7 +224,9 @@ export class QuickPickManager {
       { placeHolder: "Select provider" },
     );
 
-    if (!selectedProvider) return;
+    if (!selectedProvider) {
+      return;
+    }
 
     const modelId = await vscode.window.showInputBox({
       placeHolder: "gpt-4o",
@@ -225,7 +235,9 @@ export class QuickPickManager {
       ignoreFocusOut: true,
     });
 
-    if (!modelId) return;
+    if (!modelId) {
+      return;
+    }
 
     const modelName = await vscode.window.showInputBox({
       placeHolder: modelId,
@@ -262,7 +274,9 @@ export class QuickPickManager {
       { placeHolder: "Select provider" },
     );
 
-    if (!selectedProvider) return;
+    if (!selectedProvider) {
+      return;
+    }
 
     const provider = selectedProvider.provider;
 
@@ -276,7 +290,9 @@ export class QuickPickManager {
       { placeHolder: "Select model to remove" },
     );
 
-    if (!selectedModel) return;
+    if (!selectedModel) {
+      return;
+    }
 
     const newModels = provider.models.filter((m) => m !== selectedModel.label);
 

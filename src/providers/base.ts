@@ -1,20 +1,40 @@
-import * as vscode from 'vscode';
-import type { ProviderConfig } from '../types';
+import * as vscode from "vscode";
+import { PROVIDER_VENDOR_ID, type ProviderConfig } from "../types";
 
-export abstract class BaseProvider
-  implements vscode.LanguageModelChatProvider
-{
+export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
   protected config: ProviderConfig;
   protected context: vscode.ExtensionContext;
 
   constructor(config: ProviderConfig, context: vscode.ExtensionContext) {
     this.config = config;
     this.context = context;
+
+    this.migrateGroup();
+  }
+
+  async migrateGroup() {
+    try {
+      await vscode.commands.executeCommand("lm.migrateLanguageModelsProviderGroup", {
+        name: this.config.name,
+        vendor: PROVIDER_VENDOR_ID,
+        groupId: this.config.id,
+      });
+    } catch (error) {
+      console.warn(this.createErrorMessage("Failed to migrate provider group", error));
+    }
+  }
+
+  getConfig(): ProviderConfig {
+    return this.config;
+  }
+
+  setConfig(config: ProviderConfig): void {
+    this.config = config;
   }
 
   abstract provideLanguageModelChatInformation(
     options: { silent: boolean },
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]>;
 
   abstract provideLanguageModelChatResponse(
@@ -22,31 +42,28 @@ export abstract class BaseProvider
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<void>;
 
   abstract provideTokenCount(
     model: vscode.LanguageModelChatInformation,
     text: string | vscode.LanguageModelChatRequestMessage,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<number>;
 
   protected async getApiKey(): Promise<string> {
     if (this.config.apiKeySecretKey) {
       const key = await this.context.secrets.get(this.config.apiKeySecretKey);
-      return key ?? '';
+      return key ?? "";
     }
-    return '';
+    return "";
   }
 
   protected async getApiKeyFromConfiguration(): Promise<string> {
-    return '';
+    return "";
   }
 
-  protected createErrorMessage(
-    operation: string,
-    error: unknown
-  ): string {
+  protected createErrorMessage(operation: string, error: unknown): string {
     if (error instanceof Error) {
       return `${operation}: ${error.message}`;
     }
@@ -55,15 +72,13 @@ export abstract class BaseProvider
 
   protected createLmError(message: string, _code: string): vscode.LanguageModelError {
     // @ts-expect-error - VS Code API değişkenlik gösterebilir
-    return new vscode.LanguageModelError(message, '');
+    return new vscode.LanguageModelError(message, "");
   }
 
   protected extractTextContent(message: vscode.LanguageModelChatRequestMessage): string {
     return message.content
-      .filter((part): part is vscode.LanguageModelTextPart =>
-        part instanceof vscode.LanguageModelTextPart
-      )
+      .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
       .map((part) => part.value)
-      .join('');
+      .join("");
   }
 }

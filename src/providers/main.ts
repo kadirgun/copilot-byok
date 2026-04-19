@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import type { ProviderConfig } from "../types";
-import { AnthropicProvider } from "./anthropic";
-import { OpenAIProvider } from "./openai";
+import type { BaseProvider } from "./base";
+import { createProvider } from "./factory";
 
 export class MainProvider implements vscode.LanguageModelChatProvider {
-  private providers: Map<string, vscode.LanguageModelChatProvider> = new Map();
+  private providers: Map<string, BaseProvider> = new Map();
 
   constructor(
     configs: ProviderConfig[],
@@ -13,43 +13,57 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
     this.reload(configs);
   }
 
-  reload(configs: ProviderConfig[]): void {
-    this.providers.clear();
-
+  async reload(configs: ProviderConfig[]): Promise<void> {
     for (const config of configs) {
       if (!config.enabled) {
         continue;
       }
 
-      const provider =
-        config.type === "anthropic"
-          ? new AnthropicProvider(config, this.context)
-          : new OpenAIProvider(config, this.context);
+      if (this.providers.has(config.id)) {
+        const provider = this.providers.get(config.id);
+        provider?.setConfig(config);
+        continue;
+      }
 
-      this.providers.set(config.name, provider);
+      const provider = createProvider(config, this.context) as BaseProvider;
+
+      this.providers.set(config.id, provider);
     }
-  }
-
-  private getProvider(group?: string): vscode.LanguageModelChatProvider | undefined {
-    if (group && this.providers.has(group)) {
-      return this.providers.get(group);
-    }
-
-    return this.providers.values().next().value;
   }
 
   async provideLanguageModelChatInformation(
-    options: { silent: boolean; group?: string },
+    options: { silent: boolean; configuration?: { groupId: string } },
     token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    const provider = this.getProvider(options.group);
-    if (!provider) {
+    console.log("options", options);
+
+    if (!options.configuration?.groupId || this.providers.size === 0) {
       return [];
     }
 
-    console.log(options);
+    const provider = this.providers.get(options.configuration?.groupId);
+    if (!provider) {
+      return [
+        {
+          id: "placeholder",
+          name: "(No models configured — open Manage Language Models)",
+          family: "placeholder",
+          detail: "BYOK",
+          version: "0.0.0",
+          maxInputTokens: 0,
+          maxOutputTokens: 0,
+          isUserSelectable: false,
+          tooltip: "Configure this provider to add models.",
+          capabilities: {},
+        },
+      ];
+    }
+
+    console.log("provider", provider);
 
     const models = await provider.provideLanguageModelChatInformation({ silent: options.silent }, token);
+
+    console.log("models", models);
 
     return models || [];
   }
@@ -60,27 +74,13 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
     options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-  ): Promise<void> {
-    const group = model.detail;
-    const provider = this.getProvider(group);
-    if (!provider) {
-      throw new Error(`No provider registered for group ${group ?? "<default>"}`);
-    }
-
-    return provider.provideLanguageModelChatResponse(model, messages, options, progress, token);
-  }
+  ): Promise<void> {}
 
   async provideTokenCount(
     model: vscode.LanguageModelChatInformation,
     text: string | vscode.LanguageModelChatRequestMessage,
     token: vscode.CancellationToken,
   ): Promise<number> {
-    const group = model.detail;
-    const provider = this.getProvider(group);
-    if (!provider) {
-      return 0;
-    }
-
-    return provider.provideTokenCount(model, text, token);
+    return 0;
   }
 }

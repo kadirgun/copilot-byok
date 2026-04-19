@@ -50,7 +50,20 @@
     "languageModelChatProviders": [
       {
         "vendor": "copilot-byok",
-        "displayName": "BYOK"
+        "displayName": "BYOK",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name of this provider configuration"
+            },
+            "groupId": {
+              "type": "string",
+              "description": "Group ID for this provider configuration"
+            }
+          }
+        }
       }
     ]
   },
