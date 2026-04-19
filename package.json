@@ -1,0 +1,79 @@
+{
+  "name": "copilot-byok",
+  "displayName": "Copilot BYOK",
+  "description": "Add custom OpenAI and Anthropic providers to VS Code Copilot",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.116.0"
+  },
+  "enabledApiProposals": [
+    "languageModelChatProviderRegistry"
+  ],
+  "categories": [
+    "AI"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilot-byok.configure",
+        "title": "Copilot BYOK: Configure AI Providers"
+      },
+      {
+        "command": "copilot-byok.addProvider",
+        "title": "Copilot BYOK: Add Provider"
+      },
+      {
+        "command": "copilot-byok.editProvider",
+        "title": "Copilot BYOK: Edit Provider"
+      },
+      {
+        "command": "copilot-byok.deleteProvider",
+        "title": "Copilot BYOK: Delete Provider"
+      },
+      {
+        "command": "copilot-byok.addModel",
+        "title": "Copilot BYOK: Add Model"
+      },
+      {
+        "command": "copilot-byok.removeModel",
+        "title": "Copilot BYOK: Remove Model"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot BYOK",
+      "properties": {}
+    },
+    "languageModelChatProviders": [
+      {
+        "vendor": "copilot-byok",
+        "displayName": "BYOK"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.116.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
+  }
+}
