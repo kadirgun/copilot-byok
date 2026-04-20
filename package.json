@@ -7,7 +7,7 @@
     "vscode": "^1.116.0"
   },
   "enabledApiProposals": [
-    "languageModelChatProviderRegistry"
+    "languageModelSystem"
   ],
   "categories": [
     "AI"
@@ -18,10 +18,6 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "copilot-byok.configure",
-        "title": "Copilot BYOK: Configure AI Providers"
-      },
       {
         "command": "copilot-byok.addProvider",
         "title": "Copilot BYOK: Add Provider"
@@ -39,8 +35,12 @@
         "title": "Copilot BYOK: Add Model"
       },
       {
-        "command": "copilot-byok.removeModel",
-        "title": "Copilot BYOK: Remove Model"
+        "command": "copilot-byok.deleteModel",
+        "title": "Copilot BYOK: Delete Model"
+      },
+      {
+        "command": "copilot-byok.editModel",
+        "title": "Copilot BYOK: Edit Model"
       }
     ],
     "configuration": {
@@ -73,9 +73,11 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "lodash.kebabcase": "^4.1.1",
     "openai": "^4.104.0"
   },
   "devDependencies": {
+    "@types/lodash.kebabcase": "^4.1.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.116.0",

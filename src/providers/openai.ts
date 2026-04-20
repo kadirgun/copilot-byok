@@ -4,34 +4,46 @@ import type { ProviderConfig } from "../types";
 import { BaseProvider } from "./base";
 
 export class OpenAIProvider extends BaseProvider {
+  private client?: OpenAI;
+
   constructor(config: ProviderConfig, context: vscode.ExtensionContext) {
     super(config, context);
+  }
+
+  async getClient(): Promise<OpenAI> {
+    if (this.client) {
+      return this.client;
+    }
+
+    const apiKey = await this.getApiKey();
+
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: this.config.baseURL ?? "https://api.openai.com/v1",
+    });
+
+    return this.client;
   }
 
   async provideLanguageModelChatInformation(
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    const models: vscode.LanguageModelChatInformation[] = [];
-
-    for (const modelId of this.config.models) {
-      models.push({
-        id: modelId,
-        name: modelId,
-        family: modelId,
-        detail: this.config.name,
-        version: "1.0.0",
-        maxInputTokens: 128000,
-        maxOutputTokens: 16384,
-        isUserSelectable: true,
-        capabilities: {
-          imageInput: true,
-          toolCalling: true,
-        },
-      });
-    }
-
-    return models;
+    return this.config.models.map((model) => ({
+      id: model.id,
+      name: model.name || model.id,
+      family: "OpenAI",
+      detail: this.config.name,
+      version: "1.0.0",
+      maxInputTokens: model.maxInputTokens ?? 128000,
+      maxOutputTokens: model.maxOutputTokens ?? 16384,
+      isUserSelectable: true,
+      capabilities: model.capabilities ?? {
+        imageInput: true,
+        toolCalling: true,
+      },
+      groupId: this.config.id,
+    } as vscode.LanguageModelChatInformation));
   }
 
   async provideLanguageModelChatResponse(
@@ -41,35 +53,40 @@ export class OpenAIProvider extends BaseProvider {
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
   ): Promise<void> {
-    const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      throw new Error("API key not configured");
-    }
+    const client = await this.getClient();
+    const tools = options.tools ? this.mapToolsToOpenAIFormat(options.tools) : undefined;
 
-    const client = new OpenAI({
-      apiKey,
-      baseURL: this.config.baseURL ?? "https://api.openai.com/v1",
-    });
+    const mappedMessages = this.extractMessagesForOpenAI(messages);
 
-    const response = await client.chat.completions.create({
+    const stream = await client.chat.completions.create({
       model: model.id,
-      messages: messages.map((message) => ({
-        role: String(message.role) === "system" ? "system" : String(message.role) === "user" ? "user" : "assistant",
-        content: message.content
-          .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-          .map((part) => part.value)
-          .join(""),
-      })),
+      messages: mappedMessages,
+      tools,
+      tool_choice: "auto",
       stream: true,
     });
 
-    for await (const chunk of response) {
+    for await (const chunk of stream) {
       if (token.isCancellationRequested) {
         break;
       }
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        progress.report(new vscode.LanguageModelTextPart(content));
+
+      const delta = chunk.choices[0]?.delta;
+
+      if (delta?.content) {
+        progress.report(new vscode.LanguageModelTextPart(delta.content));
+      }
+
+      if (delta?.tool_calls) {
+        for (const toolCall of delta.tool_calls) {
+          if (toolCall.function?.name && toolCall.id) {
+            progress.report(new vscode.LanguageModelToolCallPart(
+              toolCall.id,
+              toolCall.function.name,
+              toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
+            ));
+          }
+        }
       }
     }
   }
@@ -86,6 +103,64 @@ export class OpenAIProvider extends BaseProvider {
             .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
             .map((part) => part.value)
             .join("");
+
     return Math.ceil(content.length / 4);
+  }
+
+  private mapToolsToOpenAIFormat(tools: readonly vscode.LanguageModelChatTool[]): OpenAI.Chat.ChatCompletionTool[] {
+    return tools.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description || "",
+        parameters:
+          typeof tool.inputSchema === "object" && tool.inputSchema !== null
+            ? (tool.inputSchema as Record<string, unknown>)
+            : { type: "object", properties: {} },
+      },
+    }));
+  }
+
+  private extractMessagesForOpenAI(messages: readonly vscode.LanguageModelChatRequestMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+    return messages.map((message) => {
+      const { text, toolCalls, toolResults } = this.extractTextAndToolParts(message);
+
+      const role = this.getRole(message.role);
+
+      if (toolCalls.length > 0 || toolResults.length > 0) {
+        const msg: OpenAI.Chat.ChatCompletionAssistantMessageParam | OpenAI.Chat.ChatCompletionToolMessageParam = {
+          role,
+        } as OpenAI.Chat.ChatCompletionAssistantMessageParam | OpenAI.Chat.ChatCompletionToolMessageParam;
+
+        if (text) {
+          msg.content = text;
+        }
+
+        if (toolCalls.length > 0) {
+          (msg as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls = toolCalls.map((tc) => ({
+            id: tc.callId,
+            type: "function" as const,
+            function: {
+              name: tc.name,
+              arguments: JSON.stringify(tc.input),
+            },
+          }));
+        }
+
+        if (toolResults.length > 0) {
+          (msg as OpenAI.Chat.ChatCompletionToolMessageParam).tool_call_id = toolResults[0].callId;
+          (msg as OpenAI.Chat.ChatCompletionToolMessageParam).content = toolResults.map((tr) =>
+            typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content)
+          ).join("\n");
+        }
+
+        return msg;
+      }
+
+      return {
+        role,
+        content: text || undefined,
+      } as OpenAI.Chat.ChatCompletionMessageParam;
+    }).filter((m) => m.content !== undefined || (m as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls !== undefined);
   }
 }

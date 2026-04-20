@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
-import type { ProviderConfig } from "../types";
+import type { ConfigManager } from "../config/manager";
+import type { QuickPickManager } from "../config/quickpick";
+import { type ProviderConfig } from "../types";
 import type { BaseProvider } from "./base";
 import { createProvider } from "./factory";
 
@@ -7,18 +9,13 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
   private providers: Map<string, BaseProvider> = new Map();
 
   constructor(
-    configs: ProviderConfig[],
     private readonly context: vscode.ExtensionContext,
-  ) {
-    this.reload(configs);
-  }
+    protected configManager: ConfigManager,
+    protected quickPickManager: QuickPickManager,
+  ) {}
 
   async reload(configs: ProviderConfig[]): Promise<void> {
     for (const config of configs) {
-      if (!config.enabled) {
-        continue;
-      }
-
       if (this.providers.has(config.id)) {
         const provider = this.providers.get(config.id);
         provider?.setConfig(config);
@@ -42,21 +39,9 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
     }
 
     const provider = this.providers.get(options.configuration?.groupId);
+
     if (!provider) {
-      return [
-        {
-          id: "placeholder",
-          name: "(No models configured — open Manage Language Models)",
-          family: "placeholder",
-          detail: "BYOK",
-          version: "0.0.0",
-          maxInputTokens: 0,
-          maxOutputTokens: 0,
-          isUserSelectable: false,
-          tooltip: "Configure this provider to add models.",
-          capabilities: {},
-        },
-      ];
+      return [];
     }
 
     console.log("provider", provider);
@@ -74,13 +59,27 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
     options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-  ): Promise<void> {}
+  ): Promise<void> {
+    const provider = this.providers.get(model.groupId);
+
+    if (!provider) {
+      throw new Error("Provider not found for model: " + model.id);
+    }
+
+    await provider.provideLanguageModelChatResponse(model, messages, options, progress, token);
+  }
 
   async provideTokenCount(
     model: vscode.LanguageModelChatInformation,
     text: string | vscode.LanguageModelChatRequestMessage,
     token: vscode.CancellationToken,
   ): Promise<number> {
-    return 0;
+    const provider = this.providers.get(model.groupId);
+
+    if (!provider) {
+      throw new Error("Provider not found for model: " + model.id);
+    }
+
+    return await provider.provideTokenCount(model, text, token);
   }
 }

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { PROVIDER_VENDOR_ID, type ProviderConfig } from "../types";
+import { type ProviderConfig } from "../types";
 
 export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
   protected config: ProviderConfig;
@@ -8,20 +8,6 @@ export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
   constructor(config: ProviderConfig, context: vscode.ExtensionContext) {
     this.config = config;
     this.context = context;
-
-    this.migrateGroup();
-  }
-
-  async migrateGroup() {
-    try {
-      await vscode.commands.executeCommand("lm.migrateLanguageModelsProviderGroup", {
-        name: this.config.name,
-        vendor: PROVIDER_VENDOR_ID,
-        groupId: this.config.id,
-      });
-    } catch (error) {
-      console.warn(this.createErrorMessage("Failed to migrate provider group", error));
-    }
   }
 
   getConfig(): ProviderConfig {
@@ -59,10 +45,6 @@ export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
     return "";
   }
 
-  protected async getApiKeyFromConfiguration(): Promise<string> {
-    return "";
-  }
-
   protected createErrorMessage(operation: string, error: unknown): string {
     if (error instanceof Error) {
       return `${operation}: ${error.message}`;
@@ -80,5 +62,42 @@ export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
       .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
       .map((part) => part.value)
       .join("");
+  }
+
+  protected extractTextAndToolParts(message: vscode.LanguageModelChatRequestMessage): {
+    text: string;
+    toolCalls: vscode.LanguageModelToolCallPart[];
+    toolResults: vscode.LanguageModelToolResultPart[];
+  } {
+    const textParts: string[] = [];
+    const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+    const toolResults: vscode.LanguageModelToolResultPart[] = [];
+
+    for (const part of message.content) {
+      if (part instanceof vscode.LanguageModelTextPart) {
+        textParts.push(part.value);
+      } else if (part instanceof vscode.LanguageModelToolCallPart) {
+        toolCalls.push(part);
+      } else if (part instanceof vscode.LanguageModelToolResultPart) {
+        toolResults.push(part);
+      }
+    }
+
+    return {
+      text: textParts.join(""),
+      toolCalls,
+      toolResults,
+    };
+  }
+
+  protected getRole(role: vscode.LanguageModelChatMessageRole): "system" | "user" | "assistant" {
+    switch (role) {
+      case vscode.LanguageModelChatMessageRole.Assistant:
+        return "assistant";
+      case vscode.LanguageModelChatMessageRole.User:
+        return "user";
+      default:
+        return "user";
+    }
   }
 }

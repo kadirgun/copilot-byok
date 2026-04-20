@@ -1,34 +1,52 @@
-import Anthropic from '@anthropic-ai/sdk';
-import * as vscode from 'vscode';
-import type { ProviderConfig } from '../types';
-import { BaseProvider } from './base';
+import Anthropic from "@anthropic-ai/sdk";
+import * as vscode from "vscode";
+import type { ProviderConfig } from "../types";
+import { BaseProvider } from "./base";
 
 export class AnthropicProvider extends BaseProvider {
+  private client?: Anthropic;
+
   constructor(config: ProviderConfig, context: vscode.ExtensionContext) {
     super(config, context);
+  }
+
+  private async getClient(): Promise<Anthropic> {
+    if (this.client) {
+      return this.client;
+    }
+
+    const apiKey = await this.getApiKey();
+
+    this.client = new Anthropic({
+      apiKey,
+      baseURL: this.config.baseURL ?? "https://api.anthropic.com",
+    });
+
+    return this.client;
   }
 
   async provideLanguageModelChatInformation(
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      return [];
-    }
-
-    return this.config.models.map((modelId) => ({
-      id: modelId,
-      name: modelId,
-      family: modelId,
-      version: '1.0.0',
-      maxInputTokens: 200000,
-      maxOutputTokens: 8192,
-      capabilities: {
-        imageInput: true,
-        toolCalling: true,
-      },
-    }));
+    return this.config.models.map(
+      (model) =>
+        ({
+          id: model.id,
+          name: model.name || model.id,
+          family: "Anthropic",
+          detail: this.config.name,
+          version: "1.0.0",
+          maxInputTokens: model.maxInputTokens ?? 200000,
+          maxOutputTokens: model.maxOutputTokens ?? 8192,
+          isUserSelectable: true,
+          capabilities: model.capabilities ?? {
+            imageInput: true,
+            toolCalling: true,
+          },
+          groupId: this.config.id,
+        }) as vscode.LanguageModelChatInformation,
+    );
   }
 
   async provideLanguageModelChatResponse(
@@ -38,34 +56,86 @@ export class AnthropicProvider extends BaseProvider {
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
   ): Promise<void> {
-    const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      throw new Error('API key not configured');
+    const client = await this.getClient();
+
+    const mappedMessages: Anthropic.MessageParam[] = [];
+    for (const message of messages) {
+      const text = this.extractTextContent(message);
+      const role = message.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant";
+
+      const contentBlocks: Anthropic.ContentBlockParam[] = [];
+
+      if (text) {
+        contentBlocks.push({ type: "text", text } as Anthropic.TextBlockParam);
+      }
+
+      for (const part of message.content) {
+        if (part instanceof vscode.LanguageModelToolCallPart) {
+          contentBlocks.push({
+            type: "tool_use",
+            id: part.callId,
+            name: part.name,
+            input: part.input,
+          } as Anthropic.ToolUseBlockParam);
+        } else if (part instanceof vscode.LanguageModelToolResultPart) {
+          const resultContent =
+            typeof part.content === "string"
+              ? part.content
+              : part.content
+                  .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
+                  .map((p) => p.value)
+                  .join("\n");
+
+          contentBlocks.push({
+            type: "tool_result",
+            tool_use_id: part.callId,
+            content: resultContent,
+          } as Anthropic.ToolResultBlockParam);
+        }
+      }
+
+      if (contentBlocks.length > 0) {
+        mappedMessages.push({
+          role: role as "user" | "assistant",
+          content: contentBlocks,
+        } as Anthropic.MessageParam);
+      }
     }
 
-    const client = new Anthropic({
-      apiKey,
-      baseURL: this.config.baseURL ?? 'https://api.anthropic.com',
-    });
+    if (mappedMessages.length === 0) {
+      mappedMessages.push({
+        role: "user" as const,
+        content: " ",
+      } as Anthropic.MessageParam);
+    }
 
-    const stream = await client.messages.stream({
-        model: model.id,
-      max_tokens: 8192,
-      messages: messages.map((message) => ({
-        role: String(message.role) === 'user' ? 'user' : 'assistant',
-        content: message.content
-          .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-          .map((part) => part.value)
-          .join(''),
-      })) as Anthropic.MessageParam[],
+    const tools = options.tools?.map((tool) => ({
+      name: tool.name,
+      description: tool.description || "",
+      input_schema: tool.inputSchema ?? { type: "object", properties: {} },
+    })) as unknown as Anthropic.Tool[];
+
+    const stream = client.messages.stream({
+      model: model.id,
+      messages: mappedMessages,
+      tools: tools?.length ? tools : undefined,
+      max_tokens: model.maxOutputTokens || 8192,
     });
 
     for await (const chunk of stream) {
       if (token.isCancellationRequested) {
         break;
       }
-      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-        progress.report(new vscode.LanguageModelTextPart(chunk.delta.text));
+
+      if (chunk.type === "content_block_start") {
+        if (chunk.content_block.type === "tool_use") {
+          console.log("Tool call detected in stream:", chunk.content_block.name);
+          progress.report(new vscode.LanguageModelToolCallPart(chunk.content_block.id, chunk.content_block.name, {}));
+        }
+      } else if (chunk.type === "content_block_delta") {
+        if (chunk.delta.type === "text_delta") {
+          progress.report(new vscode.LanguageModelTextPart(chunk.delta.text));
+        }
       }
     }
   }
@@ -75,10 +145,14 @@ export class AnthropicProvider extends BaseProvider {
     text: string | vscode.LanguageModelChatRequestMessage,
     _token: vscode.CancellationToken,
   ): Promise<number> {
-    const content = typeof text === 'string' ? text : text.content
-      .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-      .map((part) => part.value)
-      .join('');
+    const content =
+      typeof text === "string"
+        ? text
+        : text.content
+            .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+            .map((part) => part.value)
+            .join("");
+
     return Math.ceil(content.length / 4);
   }
 }

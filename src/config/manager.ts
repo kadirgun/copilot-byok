@@ -12,23 +12,29 @@ export class ConfigManager {
 
   async saveProvider(provider: ProviderConfig): Promise<void> {
     const providers = await this.loadProviders();
-    const index = providers.findIndex((p) => p.name === provider.name);
+    const index = providers.findIndex((p) => p.id === provider.id);
     if (index >= 0) {
       providers[index] = provider;
     } else {
       providers.push(provider);
-      await vscode.commands.executeCommand("lm.addLanguageModelsProviderGroup", {
-        groupId: provider.id,
-        vendor: PROVIDER_VENDOR_ID,
-        name: provider.name,
-      });
+
+      try {
+        await vscode.commands.executeCommand("lm.migrateLanguageModelsProviderGroup", {
+          groupId: provider.id,
+          vendor: PROVIDER_VENDOR_ID,
+          name: provider.name,
+        });
+      } catch {
+        console.warn("Failed to migrate language model provider group");
+      }
     }
+
     await this.context.workspaceState.update(PROVIDERS_KEY, providers);
   }
 
-  async deleteProvider(providerName: string): Promise<void> {
+  async deleteProvider(selector: string): Promise<void> {
     const providers = await this.loadProviders();
-    const provider = providers.find((p) => p.name === providerName);
+    const provider = providers.find((p) => p.name === selector || p.id === selector);
 
     if (!provider) {
       return;
@@ -43,13 +49,7 @@ export class ConfigManager {
 
     await this.context.workspaceState.update(
       PROVIDERS_KEY,
-      providers.filter((p) => p.name !== providerName),
+      providers.filter((p) => p.id !== provider.id),
     );
-
-    await vscode.commands.executeCommand("lm.removeLanguageModelsProviderGroup", {
-      groupId: providerName,
-      vendor: PROVIDER_VENDOR_ID,
-      name: providerName,
-    });
   }
 }
