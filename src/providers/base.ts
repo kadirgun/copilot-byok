@@ -37,12 +37,12 @@ export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
     token: vscode.CancellationToken,
   ): Promise<number>;
 
-  protected async getApiKey(): Promise<string> {
+  protected async getApiKey(): Promise<string | undefined> {
     if (this.config.apiKeySecretKey) {
       const key = await this.context.secrets.get(this.config.apiKeySecretKey);
-      return key ?? "";
+      return key || undefined;
     }
-    return "";
+    return undefined;
   }
 
   protected createErrorMessage(operation: string, error: unknown): string {
@@ -90,13 +90,11 @@ export abstract class BaseProvider implements vscode.LanguageModelChatProvider {
     };
   }
 
-  protected getRole(role: vscode.LanguageModelChatMessageRole): "system" | "user" | "assistant" {
+  protected getRole(role: vscode.LanguageModelChatMessageRole): "user" | "assistant" {
     switch (role) {
       case vscode.LanguageModelChatMessageRole.Assistant:
         return "assistant";
       case vscode.LanguageModelChatMessageRole.User:
-        return "user";
-      default:
         return "user";
     }
   }

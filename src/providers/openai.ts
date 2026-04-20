@@ -3,11 +3,44 @@ import * as vscode from "vscode";
 import type { ProviderConfig } from "../types";
 import { BaseProvider } from "./base";
 
+interface PendingToolCall {
+  id?: string;
+  name?: string;
+  arguments: string;
+}
+
+class OpenAITransport extends OpenAI {
+  private readonly noAuth: boolean;
+
+  constructor(options: ConstructorParameters<typeof OpenAI>[0] & { noAuth?: boolean }) {
+    const { noAuth, ...rest } = options;
+    super(rest);
+    this.noAuth = !!noAuth;
+  }
+
+  protected override defaultHeaders(opts: Parameters<OpenAI["defaultHeaders"]>[0]): Record<string, string | null | undefined> {
+    const headers = super.defaultHeaders(opts);
+    if (!this.noAuth) {
+      return headers;
+    }
+
+    return Object.fromEntries(Object.entries(headers).filter(([name]) => {
+      const lower = name.toLowerCase();
+      return lower !== "authorization" && lower !== "api-key";
+    })) as Record<string, string | null | undefined>;
+  }
+}
+
 export class OpenAIProvider extends BaseProvider {
   private client?: OpenAI;
 
   constructor(config: ProviderConfig, context: vscode.ExtensionContext) {
     super(config, context);
+  }
+
+  override setConfig(config: ProviderConfig): void {
+    this.client = undefined;
+    super.setConfig(config);
   }
 
   async getClient(): Promise<OpenAI> {
@@ -17,8 +50,9 @@ export class OpenAIProvider extends BaseProvider {
 
     const apiKey = await this.getApiKey();
 
-    this.client = new OpenAI({
-      apiKey,
+    this.client = new OpenAITransport({
+      noAuth: !apiKey,
+      apiKey: apiKey ?? "",
       baseURL: this.config.baseURL ?? "https://api.openai.com/v1",
     });
 
@@ -55,15 +89,18 @@ export class OpenAIProvider extends BaseProvider {
   ): Promise<void> {
     const client = await this.getClient();
     const tools = options.tools ? this.mapToolsToOpenAIFormat(options.tools) : undefined;
+    const toolChoice = tools?.length ? (options.toolMode === vscode.LanguageModelChatToolMode.Required ? "required" : "auto") : undefined;
 
     const mappedMessages = this.extractMessagesForOpenAI(messages);
+    const toolCalls = new Map<number, PendingToolCall>();
 
     const stream = await client.chat.completions.create({
       model: model.id,
       messages: mappedMessages,
       tools,
-      tool_choice: "auto",
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
       stream: true,
+      stream_options: { include_usage: true },
     });
 
     for await (const chunk of stream) {
@@ -79,13 +116,44 @@ export class OpenAIProvider extends BaseProvider {
 
       if (delta?.tool_calls) {
         for (const toolCall of delta.tool_calls) {
-          if (toolCall.function?.name && toolCall.id) {
-            progress.report(new vscode.LanguageModelToolCallPart(
-              toolCall.id,
-              toolCall.function.name,
-              toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
-            ));
+          const pending = toolCalls.get(toolCall.index) ?? { arguments: "" };
+          if (toolCall.id) {
+            pending.id = toolCall.id;
           }
+          if (toolCall.function?.name) {
+            pending.name = toolCall.function.name;
+          }
+          if (toolCall.function?.arguments) {
+            pending.arguments += toolCall.function.arguments;
+          }
+          toolCalls.set(toolCall.index, pending);
+
+          if (pending.id && pending.name) {
+            try {
+              progress.report(new vscode.LanguageModelToolCallPart(
+                pending.id,
+                pending.name,
+                pending.arguments ? JSON.parse(pending.arguments) : {},
+              ));
+              toolCalls.delete(toolCall.index);
+            } catch {
+              // Keep accumulating until the JSON is complete.
+            }
+          }
+        }
+      }
+    }
+
+    for (const pending of toolCalls.values()) {
+      if (pending.id && pending.name) {
+        try {
+          progress.report(new vscode.LanguageModelToolCallPart(
+            pending.id,
+            pending.name,
+            pending.arguments ? JSON.parse(pending.arguments) : {},
+          ));
+        } catch {
+          progress.report(new vscode.LanguageModelToolCallPart(pending.id, pending.name, {}));
         }
       }
     }
@@ -122,45 +190,63 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   private extractMessagesForOpenAI(messages: readonly vscode.LanguageModelChatRequestMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
-    return messages.map((message) => {
+    const mappedMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+
+    for (const message of messages) {
       const { text, toolCalls, toolResults } = this.extractTextAndToolParts(message);
 
       const role = this.getRole(message.role);
 
-      if (toolCalls.length > 0 || toolResults.length > 0) {
-        const msg: OpenAI.Chat.ChatCompletionAssistantMessageParam | OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role,
-        } as OpenAI.Chat.ChatCompletionAssistantMessageParam | OpenAI.Chat.ChatCompletionToolMessageParam;
+      if (!text && toolCalls.length === 0 && toolResults.length === 0) {
+        continue;
+      }
 
-        if (text) {
-          msg.content = text;
-        }
-
-        if (toolCalls.length > 0) {
-          (msg as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls = toolCalls.map((tc) => ({
+      if (toolCalls.length > 0) {
+        const assistantMessage: OpenAI.Chat.ChatCompletionAssistantMessageParam = {
+          role: "assistant",
+          content: text || undefined,
+          tool_calls: toolCalls.map((tc) => ({
             id: tc.callId,
             type: "function" as const,
             function: {
               name: tc.name,
               arguments: JSON.stringify(tc.input),
             },
-          }));
+          })),
+        };
+
+        if (!assistantMessage.content) {
+          delete assistantMessage.content;
         }
 
-        if (toolResults.length > 0) {
-          (msg as OpenAI.Chat.ChatCompletionToolMessageParam).tool_call_id = toolResults[0].callId;
-          (msg as OpenAI.Chat.ChatCompletionToolMessageParam).content = toolResults.map((tr) =>
-            typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content)
-          ).join("\n");
-        }
-
-        return msg;
+        mappedMessages.push(assistantMessage);
+        continue;
       }
 
-      return {
+      if (toolResults.length > 0) {
+        if (text) {
+          mappedMessages.push({ role, content: text } as OpenAI.Chat.ChatCompletionMessageParam);
+        }
+
+        for (const toolResult of toolResults) {
+          const toolMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+            role: "tool",
+            tool_call_id: toolResult.callId,
+            content: typeof toolResult.content === "string" ? toolResult.content : JSON.stringify(toolResult.content),
+          };
+
+          mappedMessages.push(toolMessage);
+        }
+
+        continue;
+      }
+
+      mappedMessages.push({
         role,
         content: text || undefined,
-      } as OpenAI.Chat.ChatCompletionMessageParam;
-    }).filter((m) => m.content !== undefined || (m as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls !== undefined);
+      } as OpenAI.Chat.ChatCompletionMessageParam);
+    }
+
+    return mappedMessages.filter((m) => m.content !== undefined || (m as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls !== undefined);
   }
 }

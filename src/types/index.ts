@@ -27,6 +27,10 @@ declare module "vscode" {
     groupId: string;
   }
 
+  interface LanguageModelChatCapabilities {
+    thinking?: boolean;
+  }
+
   class LanguageModelThinkingPart {
     constructor(value: string, metadata?: Record<string, unknown>);
     readonly value: string;

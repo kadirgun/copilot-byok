@@ -146,6 +146,11 @@ export class QuickPickManager {
           value: "toolCalling" as const,
           picked: !!existingModel?.capabilities?.toolCalling || false,
         },
+        {
+          label: "Supports Thinking",
+          value: "thinking" as const,
+          picked: existingModel?.capabilities?.thinking ?? false,
+        },
       ],
       {
         placeHolder: "Select model capabilities (optional)",
@@ -166,6 +171,8 @@ export class QuickPickManager {
           capabilities?.some((c) => c.value === "imageInput") ?? existingModel?.capabilities?.imageInput ?? false,
         toolCalling:
           capabilities?.some((c) => c.value === "toolCalling") ?? existingModel?.capabilities?.toolCalling ?? false,
+        thinking:
+          capabilities?.some((c) => c.value === "thinking") ?? existingModel?.capabilities?.thinking ?? false,
       },
     };
   }
