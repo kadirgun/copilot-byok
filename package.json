@@ -2,8 +2,9 @@
   "name": "copilot-byok",
   "displayName": "Copilot BYOK",
   "description": "Add custom OpenAI and Anthropic providers to VS Code Copilot",
-  "icon": "copilot-byok.png",
+  "icon": "images/copilot-byok.png",
   "version": "0.0.1",
+  "publisher": "kadirgun",
   "repository": {
     "url": "https://github.com/kadirgun/copilot-byok",
     "type": "git"
@@ -16,6 +17,15 @@
   ],
   "categories": [
     "AI"
+  ],
+  "keywords": [
+    "copilot",
+    "byok",
+    "openai",
+    "anthropic",
+    "provider",
+    "ai",
+    "language-model"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -106,6 +116,7 @@
     "@types/vscode": "^1.116.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
