@@ -3,7 +3,7 @@
   "displayName": "Copilot BYOK",
   "description": "Add custom OpenAI and Anthropic providers to VS Code Copilot",
   "icon": "images/copilot-byok.png",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "kadirgun",
   "repository": {
     "url": "https://github.com/kadirgun/copilot-byok",
@@ -12,9 +12,6 @@
   "engines": {
     "vscode": "^1.116.0"
   },
-  "enabledApiProposals": [
-    "languageModelSystem"
-  ],
   "categories": [
     "AI"
   ],
@@ -30,13 +27,14 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "secondarySidebar": [
         {
           "id": "copilot-byok",
-          "title": "Copilot BYOK"
+          "title": "Copilot BYOK",
+          "icon": "images/copilot-byok.png"
         }
       ]
     },
@@ -46,34 +44,41 @@
           "id": "copilot-byok.formView",
           "name": "Form",
           "type": "webview",
-          "visibility": "hidden"
+          "visibility": "hidden",
+          "icon": "images/copilot-byok.png"
         }
       ]
     },
     "commands": [
       {
         "command": "copilot-byok.addProvider",
-        "title": "Copilot BYOK: Add Provider"
+        "title": "Copilot BYOK: Add Provider",
+        "icon": "images/copilot-byok.png"
       },
       {
         "command": "copilot-byok.editProvider",
-        "title": "Copilot BYOK: Edit Provider"
+        "title": "Copilot BYOK: Edit Provider",
+        "icon": "images/copilot-byok.png"
       },
       {
         "command": "copilot-byok.deleteProvider",
-        "title": "Copilot BYOK: Delete Provider"
+        "title": "Copilot BYOK: Delete Provider",
+        "icon": "images/copilot-byok.png"
       },
       {
         "command": "copilot-byok.addModel",
-        "title": "Copilot BYOK: Add Model"
+        "title": "Copilot BYOK: Add Model",
+        "icon": "images/copilot-byok.png"
       },
       {
         "command": "copilot-byok.deleteModel",
-        "title": "Copilot BYOK: Delete Model"
+        "title": "Copilot BYOK: Delete Model",
+        "icon": "images/copilot-byok.png"
       },
       {
         "command": "copilot-byok.editModel",
-        "title": "Copilot BYOK: Edit Model"
+        "title": "Copilot BYOK: Edit Model",
+        "icon": "images/copilot-byok.png"
       }
     ],
     "configuration": {
@@ -97,10 +102,18 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "pnpm run compile && pnpm run lint",
+    "vsce:package": "pnpm exec vsce package --no-dependencies",
+    "vsce:publish": "pnpm exec vsce publish --no-dependencies",
+    "vscode:prepublish": "pnpm run package",
+    "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+    "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test"
   },
@@ -117,7 +130,9 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
+    "esbuild": "^0.28.0",
     "eslint": "^9.39.3",
+    "npm-run-all": "^4.1.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
   }

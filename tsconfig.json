@@ -12,5 +12,7 @@
     "noUnusedParameters": true,
     "types": ["mocha", "node"],
     "skipLibCheck": true
-  }
+  },
+  "include": ["src"],
+  "exclude": ["backup", "out", "node_modules"]
 }

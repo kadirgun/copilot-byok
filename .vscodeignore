@@ -10,6 +10,8 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 .tmp/**
+out/**
+esbuild.js
 node_modules/**
 pnpm-lock.yaml
 changelog.md

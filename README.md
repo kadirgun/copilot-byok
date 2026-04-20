@@ -39,6 +39,12 @@ Add custom OpenAI and Anthropic providers to VS Code Copilot.
 - **Copilot BYOK: Edit Model** - Modify model configuration
 - **Copilot BYOK: Delete Model** - Remove a model
 
+## Packaging
+
+- Run `pnpm run package` to create a VSIX locally.
+- Run `pnpm run publish` to publish with the same `--no-dependencies` packaging flow.
+- The build step stays separate in `pnpm run build`.
+
 ## Extension Settings
 
 This extension contributes the following settings:
