@@ -26,4 +26,10 @@ declare module "vscode" {
     isUserSelectable?: boolean;
     groupId: string;
   }
+
+  class LanguageModelThinkingPart {
+    constructor(value: string, metadata?: Record<string, unknown>);
+    readonly value: string;
+    readonly metadata?: Record<string, unknown>;
+  }
 }

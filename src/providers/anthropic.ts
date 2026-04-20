@@ -4,9 +4,14 @@ import type { ProviderConfig } from "../types";
 import { BaseProvider } from "./base";
 
 interface ToolCallTracker {
-  id: string;
+  toolId: string;
   name: string;
-  arguments: string;
+  jsonInput: string;
+}
+
+interface ThinkingTracker {
+  thinking: string;
+  signature: string;
 }
 
 export class AnthropicProvider extends BaseProvider {
@@ -128,7 +133,8 @@ export class AnthropicProvider extends BaseProvider {
       max_tokens: model.maxOutputTokens || 8192,
     });
 
-    let currentToolCall: ToolCallTracker | null = null;
+    let pendingToolCall: ToolCallTracker | undefined;
+    let pendingThinking: ThinkingTracker | undefined;
 
     for await (const chunk of stream) {
       if (token.isCancellationRequested) {
@@ -137,33 +143,55 @@ export class AnthropicProvider extends BaseProvider {
 
       if (chunk.type === "content_block_start") {
         if (chunk.content_block.type === "tool_use") {
-          currentToolCall = {
-            id: chunk.content_block.id,
+          pendingToolCall = {
+            toolId: chunk.content_block.id,
             name: chunk.content_block.name,
-            arguments: "",
+            jsonInput: "",
+          };
+        } else if (chunk.content_block.type === "thinking") {
+          pendingThinking = {
+            thinking: "",
+            signature: "",
           };
         }
       } else if (chunk.type === "content_block_delta") {
         if (chunk.delta.type === "text_delta") {
-          progress.report(new vscode.LanguageModelTextPart(chunk.delta.text));
-        } else if (chunk.delta.type === "input_json_delta") {
-          if (currentToolCall) {
-            currentToolCall.arguments += chunk.delta.partial_json;
+          progress.report(new vscode.LanguageModelTextPart(chunk.delta.text || ""));
+        } else if (chunk.delta.type === "thinking_delta") {
+          if (pendingThinking) {
+            pendingThinking.thinking = (pendingThinking.thinking || "") + (chunk.delta.thinking || "");
+            progress.report(new vscode.LanguageModelThinkingPart(chunk.delta.thinking || ""));
+          }
+        } else if (chunk.delta.type === "signature_delta") {
+          if (pendingThinking) {
+            pendingThinking.signature = (pendingThinking.signature || "") + (chunk.delta.signature || "");
+          }
+        } else if (chunk.delta.type === "input_json_delta" && pendingToolCall) {
+          pendingToolCall.jsonInput = (pendingToolCall.jsonInput || "") + (chunk.delta.partial_json || "");
+
+          try {
+            const parsedJson = JSON.parse(pendingToolCall.jsonInput);
+            progress.report(
+              new vscode.LanguageModelToolCallPart(pendingToolCall.toolId!, pendingToolCall.name!, parsedJson),
+            );
+            pendingToolCall = undefined;
+          } catch {
+            // JSON not complete yet, continue accumulating
           }
         }
       } else if (chunk.type === "content_block_stop") {
-        if (currentToolCall) {
+        if (pendingToolCall) {
           try {
-            const args = JSON.parse(currentToolCall.arguments);
-            progress.report(new vscode.LanguageModelToolCallPart(currentToolCall.id, currentToolCall.name, args));
+            const parsedJson = JSON.parse(pendingToolCall.jsonInput || "{}");
+            progress.report(
+              new vscode.LanguageModelToolCallPart(pendingToolCall.toolId!, pendingToolCall.name!, parsedJson),
+            );
           } catch {
-            progress.report(new vscode.LanguageModelToolCallPart(currentToolCall.id, currentToolCall.name, {}));
+            progress.report(new vscode.LanguageModelToolCallPart(pendingToolCall.toolId!, pendingToolCall.name!, {}));
           }
-          currentToolCall = null;
-        }
-      } else if (chunk.type === "message_delta") {
-        if (chunk.delta.stop_reason === "tool_use") {
-          // All tool calls completed
+          pendingToolCall = undefined;
+        } else if (pendingThinking) {
+          pendingThinking = undefined;
         }
       }
     }
