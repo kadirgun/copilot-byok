@@ -3,6 +3,12 @@ import * as vscode from "vscode";
 import type { ProviderConfig } from "../types";
 import { BaseProvider } from "./base";
 
+interface ToolCallTracker {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 export class AnthropicProvider extends BaseProvider {
   private client?: Anthropic;
 
@@ -122,6 +128,8 @@ export class AnthropicProvider extends BaseProvider {
       max_tokens: model.maxOutputTokens || 8192,
     });
 
+    let currentToolCall: ToolCallTracker | null = null;
+
     for await (const chunk of stream) {
       if (token.isCancellationRequested) {
         break;
@@ -129,12 +137,33 @@ export class AnthropicProvider extends BaseProvider {
 
       if (chunk.type === "content_block_start") {
         if (chunk.content_block.type === "tool_use") {
-          console.log("Tool call detected in stream:", chunk.content_block.name);
-          progress.report(new vscode.LanguageModelToolCallPart(chunk.content_block.id, chunk.content_block.name, {}));
+          currentToolCall = {
+            id: chunk.content_block.id,
+            name: chunk.content_block.name,
+            arguments: "",
+          };
         }
       } else if (chunk.type === "content_block_delta") {
         if (chunk.delta.type === "text_delta") {
           progress.report(new vscode.LanguageModelTextPart(chunk.delta.text));
+        } else if (chunk.delta.type === "input_json_delta") {
+          if (currentToolCall) {
+            currentToolCall.arguments += chunk.delta.partial_json;
+          }
+        }
+      } else if (chunk.type === "content_block_stop") {
+        if (currentToolCall) {
+          try {
+            const args = JSON.parse(currentToolCall.arguments);
+            progress.report(new vscode.LanguageModelToolCallPart(currentToolCall.id, currentToolCall.name, args));
+          } catch {
+            progress.report(new vscode.LanguageModelToolCallPart(currentToolCall.id, currentToolCall.name, {}));
+          }
+          currentToolCall = null;
+        }
+      } else if (chunk.type === "message_delta") {
+        if (chunk.delta.stop_reason === "tool_use") {
+          // All tool calls completed
         }
       }
     }

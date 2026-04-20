@@ -74,6 +74,7 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
     text: string | vscode.LanguageModelChatRequestMessage,
     token: vscode.CancellationToken,
   ): Promise<number> {
+    console.log("provideTokenCount", model.groupId, text);
     const provider = this.providers.get(model.groupId);
 
     if (!provider) {
