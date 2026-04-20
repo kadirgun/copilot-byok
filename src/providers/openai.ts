@@ -18,16 +18,20 @@ class OpenAITransport extends OpenAI {
     this.noAuth = !!noAuth;
   }
 
-  protected override defaultHeaders(opts: Parameters<OpenAI["defaultHeaders"]>[0]): Record<string, string | null | undefined> {
+  protected override defaultHeaders(
+    opts: Parameters<OpenAI["defaultHeaders"]>[0],
+  ): Record<string, string | null | undefined> {
     const headers = super.defaultHeaders(opts);
     if (!this.noAuth) {
       return headers;
     }
 
-    return Object.fromEntries(Object.entries(headers).filter(([name]) => {
-      const lower = name.toLowerCase();
-      return lower !== "authorization" && lower !== "api-key";
-    })) as Record<string, string | null | undefined>;
+    return Object.fromEntries(
+      Object.entries(headers).filter(([name]) => {
+        const lower = name.toLowerCase();
+        return lower !== "authorization" && lower !== "api-key";
+      }),
+    ) as Record<string, string | null | undefined>;
   }
 }
 
@@ -63,21 +67,26 @@ export class OpenAIProvider extends BaseProvider {
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    return this.config.models.map((model) => ({
-      id: model.id,
-      name: model.name || model.id,
-      family: "OpenAI",
-      detail: this.config.name,
-      version: "1.0.0",
-      maxInputTokens: model.maxInputTokens ?? 128000,
-      maxOutputTokens: model.maxOutputTokens ?? 16384,
-      isUserSelectable: true,
-      capabilities: model.capabilities ?? {
-        imageInput: true,
-        toolCalling: true,
-      },
-      groupId: this.config.id,
-    } as vscode.LanguageModelChatInformation));
+    void options;
+
+    return this.config.models.map(
+      (model) =>
+        ({
+          id: model.id,
+          name: model.name || model.id,
+          family: "OpenAI",
+          detail: this.config.name,
+          version: "1.0.0",
+          maxInputTokens: model.maxInputTokens ?? 128000,
+          maxOutputTokens: model.maxOutputTokens ?? 16384,
+          isUserSelectable: true,
+          capabilities: model.capabilities ?? {
+            imageInput: true,
+            toolCalling: true,
+          },
+          groupId: this.config.id,
+        }) as vscode.LanguageModelChatInformation,
+    );
   }
 
   async provideLanguageModelChatResponse(
@@ -89,7 +98,11 @@ export class OpenAIProvider extends BaseProvider {
   ): Promise<void> {
     const client = await this.getClient();
     const tools = options.tools ? this.mapToolsToOpenAIFormat(options.tools) : undefined;
-    const toolChoice = tools?.length ? (options.toolMode === vscode.LanguageModelChatToolMode.Required ? "required" : "auto") : undefined;
+    const toolChoice = tools?.length
+      ? options.toolMode === vscode.LanguageModelChatToolMode.Required
+        ? "required"
+        : "auto"
+      : undefined;
 
     const mappedMessages = this.extractMessagesForOpenAI(messages);
     const toolCalls = new Map<number, PendingToolCall>();
@@ -130,11 +143,13 @@ export class OpenAIProvider extends BaseProvider {
 
           if (pending.id && pending.name) {
             try {
-              progress.report(new vscode.LanguageModelToolCallPart(
-                pending.id,
-                pending.name,
-                pending.arguments ? JSON.parse(pending.arguments) : {},
-              ));
+              progress.report(
+                new vscode.LanguageModelToolCallPart(
+                  pending.id,
+                  pending.name,
+                  pending.arguments ? JSON.parse(pending.arguments) : {},
+                ),
+              );
               toolCalls.delete(toolCall.index);
             } catch {
               // Keep accumulating until the JSON is complete.
@@ -147,11 +162,13 @@ export class OpenAIProvider extends BaseProvider {
     for (const pending of toolCalls.values()) {
       if (pending.id && pending.name) {
         try {
-          progress.report(new vscode.LanguageModelToolCallPart(
-            pending.id,
-            pending.name,
-            pending.arguments ? JSON.parse(pending.arguments) : {},
-          ));
+          progress.report(
+            new vscode.LanguageModelToolCallPart(
+              pending.id,
+              pending.name,
+              pending.arguments ? JSON.parse(pending.arguments) : {},
+            ),
+          );
         } catch {
           progress.report(new vscode.LanguageModelToolCallPart(pending.id, pending.name, {}));
         }
@@ -189,7 +206,9 @@ export class OpenAIProvider extends BaseProvider {
     }));
   }
 
-  private extractMessagesForOpenAI(messages: readonly vscode.LanguageModelChatRequestMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+  private extractMessagesForOpenAI(
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+  ): OpenAI.Chat.ChatCompletionMessageParam[] {
     const mappedMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
 
     for (const message of messages) {
@@ -247,6 +266,8 @@ export class OpenAIProvider extends BaseProvider {
       } as OpenAI.Chat.ChatCompletionMessageParam);
     }
 
-    return mappedMessages.filter((m) => m.content !== undefined || (m as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls !== undefined);
+    return mappedMessages.filter(
+      (m) => m.content !== undefined || (m as OpenAI.Chat.ChatCompletionAssistantMessageParam).tool_calls !== undefined,
+    );
   }
 }

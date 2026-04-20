@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { ConfigManager } from "../config/manager";
-import type { QuickPickManager } from "../config/quickpick";
+import type { QuickPickManager } from "../config/quickpick.js";
 import { type ProviderConfig } from "../types";
 import type { BaseProvider } from "./base";
 import { createProvider } from "./factory";

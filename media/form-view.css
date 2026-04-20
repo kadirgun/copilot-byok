@@ -1,0 +1,305 @@
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  box-sizing: border-box;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-sideBar-foreground, var(--vscode-editor-foreground));
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  overflow: hidden;
+}
+
+.idle-state {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: flex-start;
+}
+
+.idle-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--vscode-sideBar-border, var(--vscode-panel-border, var(--vscode-widget-border, transparent)));
+  border-radius: 6px;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+
+.idle-kicker {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.idle-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.idle-description,
+.idle-tip {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.4;
+  font-size: 12px;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid
+    var(--vscode-sideBar-border, var(--vscode-panel-border, var(--vscode-widget-border, transparent)));
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.modal-description {
+  margin: 6px 0 0;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.4;
+  font-size: 12px;
+}
+
+.modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+  overflow: auto;
+}
+
+.form-summary {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+}
+
+.form-summary:empty {
+  display: none;
+}
+
+.form-summary.has-error {
+  color: var(--vscode-errorForeground);
+}
+
+.form-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.form-field {
+  display: grid;
+  gap: 4px;
+}
+
+.form-field--checkbox {
+  gap: 0;
+}
+
+.form-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.form-required {
+  color: var(--vscode-errorForeground);
+}
+
+.form-help {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.35;
+  font-size: 11px;
+}
+
+.form-control,
+.form-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  outline: none;
+  font: inherit;
+  line-height: 16px;
+  min-height: 24px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.form-control[type="password"] {
+  letter-spacing: 0.02em;
+}
+
+.form-checkbox-row {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.form-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 9px 0 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  position: relative;
+  background-color: var(--vscode-settings-checkboxBackground, var(--vscode-checkbox-background));
+  color: var(--vscode-settings-checkboxForeground, var(--vscode-checkbox-foreground));
+  border-color: var(--vscode-settings-checkboxBorder, var(--vscode-checkbox-border));
+}
+
+.form-checkbox::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+}
+
+.form-checkbox:checked {
+  background-color: var(--vscode-settings-checkboxBackground, var(--vscode-checkbox-background));
+  color: var(--vscode-settings-checkboxForeground, var(--vscode-checkbox-foreground));
+  border-color: var(--vscode-settings-checkboxBorder, var(--vscode-checkbox-border));
+}
+
+.form-checkbox:checked::after {
+  opacity: 1;
+}
+
+.form-checkbox:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.form-checkbox-row .form-label {
+  line-height: 18px;
+}
+
+.form-field--checkbox > .form-help,
+.form-field--checkbox > .form-error {
+  margin-left: 27px;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--vscode-errorForeground);
+}
+
+.form-error:empty {
+  display: none;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid
+    var(--vscode-sideBar-border, var(--vscode-panel-border, var(--vscode-widget-border, transparent)));
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+
+.button {
+  min-width: 84px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+  line-height: 16px;
+  font-size: 12px;
+  min-height: 22px;
+  box-sizing: border-box;
+}
+
+.button-primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border-color: var(--vscode-button-border, transparent);
+}
+
+.button-primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.button-secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border-color: var(--vscode-button-secondaryBorder, var(--vscode-button-border, transparent));
+}
+
+.button-secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.button:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+body.vscode-reduce-motion * {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}
+
+body.vscode-using-screen-reader .modal {
+  border: 0;
+}

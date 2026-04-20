@@ -1,12 +1,14 @@
 import * as vscode from "vscode";
 import { ConfigManager } from "./config/manager";
-import { QuickPickManager } from "./config/quickpick";
+import { QuickPickManager } from "./config/quickpick.js";
 import { MainProvider } from "./providers/main";
 import { PROVIDER_VENDOR_ID } from "./types";
+import { ModalFormManager } from "./ui/modal-form.js";
 
 export function activate(context: vscode.ExtensionContext): void {
   const configManager = new ConfigManager(context);
-  const quickPickManager = new QuickPickManager(context, configManager);
+  const modalFormManager = new ModalFormManager(context);
+  const quickPickManager = new QuickPickManager(context, configManager, modalFormManager);
   const mainProvider = new MainProvider(context, configManager, quickPickManager);
   const emitter = new vscode.EventEmitter<void>();
 

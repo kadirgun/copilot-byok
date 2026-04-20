@@ -1,12 +1,16 @@
 import kebabCase from "lodash.kebabcase";
 import * as vscode from "vscode";
-import type { ModelConfig, ProviderConfig } from "../types";
+import type { ModalFormField, ModelConfig, ProviderConfig } from "../types";
+import type { ModalFormManager } from "../ui/modal-form";
 import type { ConfigManager } from "./manager";
+
+type ProviderType = "openai" | "anthropic";
 
 export class QuickPickManager {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly configManager: ConfigManager,
+    private readonly modalFormManager: ModalFormManager,
   ) {}
 
   private async selectProvider(): Promise<ProviderConfig | undefined> {
@@ -15,228 +19,254 @@ export class QuickPickManager {
       vscode.window.showInformationMessage('No providers configured. Run "Add Provider" first.');
       return;
     }
+
     const selected = await vscode.window.showQuickPick(
-      providers.map((p) => ({
-        label: `${p.name} (${p.type})`,
-        provider: p,
+      providers.map((provider) => ({
+        label: `${provider.name} (${provider.type})`,
+        provider,
       })),
       { placeHolder: "Select provider" },
     );
+
     return selected?.provider;
   }
 
-  private async promptApiKey() {
-    const apiKey = await vscode.window.showInputBox({
+  private async promptApiKey(): Promise<string | undefined> {
+    return await vscode.window.showInputBox({
       placeHolder: "sk-...",
       prompt: "Enter API key",
       ignoreFocusOut: true,
     });
-
-    return apiKey;
   }
 
-  private async promptBaseURL() {
-    const baseURL = await vscode.window.showInputBox({
-      placeHolder: "https://api.example.com",
-      prompt: "Enter custom base URL",
-      ignoreFocusOut: true,
-      validateInput: (value) => {
-        if (!value.trim()) {
-          return null;
-        }
+  private async collectProviderDetails(
+    providers: ProviderConfig[],
+    existingProvider?: ProviderConfig,
+  ): Promise<{ type: ProviderType; name: string; baseURL?: string; apiKey?: string } | undefined> {
+    const typeField: ModalFormField[] = existingProvider
+      ? []
+      : [
+          {
+            id: "type",
+            type: "select",
+            label: "Provider Type",
+            required: true,
+            value: "openai",
+            options: [
+              { label: "OpenAI", value: "openai" },
+              { label: "Anthropic", value: "anthropic" },
+            ],
+          },
+        ];
 
-        try {
-          new URL(value.trim());
-          return null;
-        } catch {
-          return "Please enter a valid URL";
-        }
+    const submitted = await this.modalFormManager.showFormModal(
+      [
+        ...typeField,
+        {
+          id: "name",
+          type: "text",
+          label: "Provider Name",
+          required: true,
+          value: existingProvider?.name ?? "",
+          placeholder: "Provider name",
+          notIn: providers.filter((provider) => provider.id !== existingProvider?.id).map((provider) => provider.name),
+          messages: {
+            required: "Provider name is required",
+            notIn: "Provider name must be unique",
+          },
+        },
+        {
+          id: "baseURL",
+          type: "text",
+          label: "Base URL",
+          required: !existingProvider,
+          value: existingProvider?.baseURL ?? "",
+          placeholder: "https://api.example.com",
+          format: "url",
+          messages: {
+            required: "Please enter a valid URL",
+            format: "Please enter a valid URL",
+          },
+        },
+        {
+          id: "apiKey",
+          type: "text",
+          label: "API Key",
+          description: "Optional. Leave empty if you want to add it later.",
+          value: "",
+          placeholder: "sk-...",
+          password: true,
+          trim: false,
+        },
+      ],
+      {
+        title: existingProvider ? "Edit Provider" : "Add Provider",
+        description: existingProvider
+          ? `Update settings for ${existingProvider.name}`
+          : "Create a new OpenAI or Anthropic provider",
+        submitLabel: existingProvider ? "Save Changes" : "Add Provider",
+        cancelLabel: "Cancel",
       },
-    });
+    );
 
-    return baseURL;
+    if (!submitted) {
+      return;
+    }
+
+    const type = existingProvider ? existingProvider.type : submitted.type === "anthropic" ? "anthropic" : "openai";
+    const name = typeof submitted.name === "string" ? submitted.name.trim() : "";
+    const baseURL = typeof submitted.baseURL === "string" ? submitted.baseURL.trim() : "";
+    const apiKey = typeof submitted.apiKey === "string" && submitted.apiKey ? submitted.apiKey : undefined;
+
+    if (!name || (!existingProvider && !baseURL)) {
+      return;
+    }
+
+    return { type, name, baseURL: baseURL || undefined, apiKey };
   }
 
   private async collectModelDetails(
     provider: ProviderConfig,
     existingModel?: ModelConfig,
   ): Promise<ModelConfig | undefined> {
-    const modelId = await vscode.window.showInputBox({
-      value: existingModel?.id ?? "",
-      placeHolder: "gpt-4o",
-      prompt: "Enter model ID (e.g., gpt-4o)",
-      validateInput: (value) => {
-        if (!value.trim()) {
-          return "Model ID is required";
-        }
-        if (provider.models.some((m) => m.id === value.trim() && m !== existingModel)) {
-          return "Model ID must be unique within the provider";
-        }
-        return null;
-      },
-      ignoreFocusOut: true,
-    });
+    const takenIds = provider.models.filter((model) => model.id !== existingModel?.id).map((model) => model.id);
 
-    if (!modelId) {
-      return;
-    }
-
-    const modelName = await vscode.window.showInputBox({
-      value: existingModel?.name ?? modelId,
-      placeHolder: "Model display name",
-      prompt: "Enter model display name (optional)",
-      ignoreFocusOut: true,
-    });
-
-    if (modelName === undefined) {
-      return;
-    }
-
-    const maxInputTokens = await vscode.window.showInputBox({
-      value: existingModel?.maxInputTokens ? String(existingModel.maxInputTokens) : "8192",
-      title: "Max Input Tokens",
-      placeHolder: "e.g., 8192",
-      prompt: "Enter max input tokens (optional)",
-      validateInput: (value) => {
-        if (!value.trim()) {
-          return null;
-        }
-        if (isNaN(Number(value.trim())) || Number(value.trim()) <= 0) {
-          return "Please enter a valid positive number";
-        }
-        return null;
-      },
-      ignoreFocusOut: true,
-    });
-
-    if (maxInputTokens === undefined) {
-      return;
-    }
-
-    const maxOutputTokens = await vscode.window.showInputBox({
-      value: existingModel?.maxOutputTokens ? String(existingModel.maxOutputTokens) : "2048",
-      title: "Max Output Tokens",
-      placeHolder: "e.g., 2048",
-      prompt: "Enter max output tokens (optional)",
-      validateInput: (value) => {
-        if (!value.trim()) {
-          return null;
-        }
-        if (isNaN(Number(value.trim())) || Number(value.trim()) <= 0) {
-          return "Please enter a valid positive number";
-        }
-        return null;
-      },
-      ignoreFocusOut: true,
-    });
-
-    if (maxOutputTokens === undefined) {
-      return;
-    }
-
-    const capabilities = await vscode.window.showQuickPick<{ label: string; value: string; picked: boolean }>(
+    const submitted = await this.modalFormManager.showFormModal(
       [
         {
+          id: "id",
+          type: "text",
+          label: "Model ID",
+          description: "Example: gpt-4o",
+          required: true,
+          value: existingModel?.id ?? "",
+          placeholder: "gpt-4o",
+          notIn: takenIds,
+          messages: {
+            required: "Model ID is required",
+            notIn: "Model ID must be unique within the provider",
+          },
+        },
+        {
+          id: "name",
+          type: "text",
+          label: "Display Name",
+          description: "Optional name shown in VS Code",
+          value: existingModel?.name ?? existingModel?.id ?? "",
+          placeholder: "Model display name",
+        },
+        {
+          id: "maxInputTokens",
+          type: "number",
+          label: "Max Input Tokens",
+          description: "Leave empty to use the provider default",
+          value: existingModel?.maxInputTokens ?? 8192,
+          placeholder: "8192",
+          min: 1,
+          integer: true,
+          messages: {
+            invalid: "Please enter a valid positive number",
+            min: "Please enter a valid positive number",
+            integer: "Please enter a valid positive number",
+          },
+        },
+        {
+          id: "maxOutputTokens",
+          type: "number",
+          label: "Max Output Tokens",
+          description: "Leave empty to use the provider default",
+          value: existingModel?.maxOutputTokens ?? 2048,
+          placeholder: "2048",
+          min: 1,
+          integer: true,
+          messages: {
+            invalid: "Please enter a valid positive number",
+            min: "Please enter a valid positive number",
+            integer: "Please enter a valid positive number",
+          },
+        },
+        {
+          id: "imageInput",
+          type: "checkbox",
           label: "Supports Image Input",
-          value: "imageInput" as const,
-          picked: existingModel?.capabilities?.imageInput ?? false,
+          value: Boolean(existingModel?.capabilities?.imageInput),
         },
         {
+          id: "toolCalling",
+          type: "checkbox",
           label: "Supports Tool Calling",
-          value: "toolCalling" as const,
-          picked: !!existingModel?.capabilities?.toolCalling || false,
+          value: Boolean(existingModel?.capabilities?.toolCalling),
         },
         {
+          id: "thinking",
+          type: "checkbox",
           label: "Supports Thinking",
-          value: "thinking" as const,
-          picked: existingModel?.capabilities?.thinking ?? false,
+          value: Boolean(existingModel?.capabilities?.thinking),
         },
       ],
       {
-        placeHolder: "Select model capabilities (optional)",
-        canPickMany: true,
-        ignoreFocusOut: true,
-        title: "Model Capabilities",
-        prompt: "Select model capabilities (optional)",
+        title: existingModel ? "Edit Model" : "Add Model",
+        description: `Configure the model for ${provider.name}`,
+        submitLabel: existingModel ? "Save" : "Add Model",
+        cancelLabel: "Cancel",
       },
     );
 
+    if (!submitted) {
+      return;
+    }
+
+    const id = typeof submitted.id === "string" ? submitted.id.trim() : "";
+    if (!id) {
+      return;
+    }
+
+    const name = typeof submitted.name === "string" && submitted.name.trim() ? submitted.name.trim() : id;
+    const maxInputTokens =
+      typeof submitted.maxInputTokens === "number" ? submitted.maxInputTokens : (existingModel?.maxInputTokens ?? 8192);
+    const maxOutputTokens =
+      typeof submitted.maxOutputTokens === "number"
+        ? submitted.maxOutputTokens
+        : (existingModel?.maxOutputTokens ?? 2048);
+
     return {
-      id: modelId.trim(),
-      name: modelName?.trim() || modelId.trim(),
-      maxInputTokens: maxInputTokens ? Number(maxInputTokens.trim()) : (existingModel?.maxInputTokens ?? 8192),
-      maxOutputTokens: maxOutputTokens ? Number(maxOutputTokens.trim()) : (existingModel?.maxOutputTokens ?? 2048),
+      id,
+      name,
+      maxInputTokens,
+      maxOutputTokens,
       capabilities: {
-        imageInput:
-          capabilities?.some((c) => c.value === "imageInput") ?? existingModel?.capabilities?.imageInput ?? false,
-        toolCalling:
-          capabilities?.some((c) => c.value === "toolCalling") ?? existingModel?.capabilities?.toolCalling ?? false,
-        thinking:
-          capabilities?.some((c) => c.value === "thinking") ?? existingModel?.capabilities?.thinking ?? false,
+        imageInput: Boolean(submitted.imageInput),
+        toolCalling: Boolean(submitted.toolCalling),
+        thinking: Boolean(submitted.thinking),
       },
     };
   }
 
   async showAddProvider(): Promise<string | undefined> {
-    const type = await vscode.window.showQuickPick<{ label: string; value: string }>(
-      [
-        { label: "OpenAI", value: "openai" },
-        { label: "Anthropic", value: "anthropic" },
-      ],
-      { placeHolder: "Select provider type" },
-    );
-
-    if (!type) {
-      return;
-    }
-
     const providers = await this.configManager.loadProviders();
-
-    const name = await vscode.window.showInputBox({
-      placeHolder: "Provider name",
-      prompt: "Enter a name for this provider",
-      validateInput: (value) => {
-        if (!value.trim()) {
-          return "Provider name is required";
-        } else if (providers.some((p) => p.name === value.trim())) {
-          return "Provider name must be unique";
-        }
-        return null;
-      },
-      ignoreFocusOut: true,
-    });
-
-    if (!name) {
+    const details = await this.collectProviderDetails(providers);
+    if (!details) {
       return;
     }
 
-    const baseURL = await this.promptBaseURL();
-
-    if (!baseURL) {
-      return;
-    }
-
-    const apiKey = await this.promptApiKey();
-
-    const providerId = `provider-${kebabCase(name)}`;
+    const providerId = `provider-${kebabCase(details.name)}`;
     const secretKey = `copilot-byok-${providerId}-apikey`;
 
-    if (apiKey) {
-      await this.context.secrets.store(secretKey, apiKey);
+    if (details.apiKey) {
+      await this.context.secrets.store(secretKey, details.apiKey);
     }
 
-    const provider: ProviderConfig = {
+    await this.configManager.saveProvider({
       id: providerId,
-      name: name,
-      type: type.value as "openai" | "anthropic",
-      baseURL: baseURL,
+      name: details.name,
+      type: details.type,
+      baseURL: details.baseURL,
       apiKeySecretKey: secretKey,
       models: [],
-    };
+    });
 
-    await this.configManager.saveProvider(provider);
-    vscode.window.showInformationMessage(`Provider "${name}" added.`);
-    return name;
+    vscode.window.showInformationMessage(`Provider "${details.name}" added.`);
+    return details.name;
   }
 
   async showEditProvider(): Promise<void> {
@@ -258,14 +288,9 @@ export class QuickPickManager {
       return;
     }
 
-    const baseURL = await vscode.window.showInputBox({
-      value: existingProvider.baseURL || "",
-      placeHolder: "Leave empty for default",
-      prompt: "Edit base URL (optional)",
-      ignoreFocusOut: true,
-    });
-
-    if (baseURL === undefined) {
+    const providers = await this.configManager.loadProviders();
+    const details = await this.collectProviderDetails(providers, existingProvider);
+    if (!details) {
       return;
     }
 
@@ -282,7 +307,9 @@ export class QuickPickManager {
 
     const updatedProvider: ProviderConfig = {
       ...existingProvider,
-      baseURL: baseURL,
+      name: details.name,
+      type: details.type,
+      baseURL: details.baseURL,
     };
 
     await this.configManager.saveProvider(updatedProvider);
@@ -310,6 +337,7 @@ export class QuickPickManager {
     if (provider.apiKeySecretKey) {
       await this.context.secrets.delete(provider.apiKeySecretKey);
     }
+
     await this.configManager.deleteProvider(provider.id);
     vscode.window.showInformationMessage(`Provider "${deletedName}" deleted.`);
     return deletedName;
@@ -326,11 +354,9 @@ export class QuickPickManager {
       return;
     }
 
-    const newModels: ModelConfig[] = [...provider.models, model];
-
     const updatedProvider: ProviderConfig = {
       ...provider,
-      models: newModels,
+      models: [...provider.models, model],
     };
 
     await this.configManager.saveProvider(updatedProvider);
@@ -349,9 +375,9 @@ export class QuickPickManager {
     }
 
     const selectedModel = await vscode.window.showQuickPick(
-      provider.models.map((m) => ({
-        label: m.name,
-        value: m,
+      provider.models.map((model) => ({
+        label: model.name,
+        value: model,
       })),
       { placeHolder: "Select model to remove" },
     );
@@ -360,11 +386,9 @@ export class QuickPickManager {
       return;
     }
 
-    const newModels = provider.models.filter((m) => m.id !== selectedModel.value.id);
-
     const updatedProvider: ProviderConfig = {
       ...provider,
-      models: newModels,
+      models: provider.models.filter((model) => model.id !== selectedModel.value.id),
     };
 
     await this.configManager.saveProvider(updatedProvider);
@@ -383,9 +407,9 @@ export class QuickPickManager {
     }
 
     const selectedModel = await vscode.window.showQuickPick(
-      provider.models.map((m) => ({
-        label: m.name,
-        value: m,
+      provider.models.map((model) => ({
+        label: model.name,
+        value: model,
       })),
       { placeHolder: "Select model to edit" },
     );
@@ -394,19 +418,18 @@ export class QuickPickManager {
       return;
     }
 
-    const modelIndex = provider.models.findIndex((m) => m.id === selectedModel.value.id);
+    const modelIndex = provider.models.findIndex((model) => model.id === selectedModel.value.id);
     const updatedModel = await this.collectModelDetails(provider, selectedModel.value);
-
     if (!updatedModel) {
       return;
     }
 
-    const newModels = [...provider.models];
-    newModels[modelIndex] = updatedModel;
+    const updatedModels = [...provider.models];
+    updatedModels[modelIndex] = updatedModel;
 
     const updatedProvider: ProviderConfig = {
       ...provider,
-      models: newModels,
+      models: updatedModels,
     };
 
     await this.configManager.saveProvider(updatedProvider);

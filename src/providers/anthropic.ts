@@ -23,16 +23,20 @@ class AnthropicTransport extends Anthropic {
     this.noAuth = !!noAuth;
   }
 
-  protected override defaultHeaders(opts: Parameters<Anthropic["defaultHeaders"]>[0]): Record<string, string | null | undefined> {
+  protected override defaultHeaders(
+    opts: Parameters<Anthropic["defaultHeaders"]>[0],
+  ): Record<string, string | null | undefined> {
     const headers = super.defaultHeaders(opts);
     if (!this.noAuth) {
       return headers;
     }
 
-    return Object.fromEntries(Object.entries(headers).filter(([name]) => {
-      const lower = name.toLowerCase();
-      return lower !== "authorization" && lower !== "x-api-key";
-    })) as Record<string, string | null | undefined>;
+    return Object.fromEntries(
+      Object.entries(headers).filter(([name]) => {
+        const lower = name.toLowerCase();
+        return lower !== "authorization" && lower !== "x-api-key";
+      }),
+    ) as Record<string, string | null | undefined>;
   }
 }
 
@@ -68,6 +72,8 @@ export class AnthropicProvider extends BaseProvider {
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
+    void options;
+
     return this.config.models.map(
       (model) =>
         ({
@@ -113,14 +119,19 @@ export class AnthropicProvider extends BaseProvider {
     })) as unknown as Anthropic.Tool[];
 
     const thinkingBudget = this.getThinkingBudget(model);
-    const thinking = model.capabilities?.thinking && thinkingBudget !== undefined ? {
-      type: "enabled" as const,
-      budget_tokens: thinkingBudget,
-    } : undefined;
+    const thinking =
+      model.capabilities?.thinking && thinkingBudget !== undefined
+        ? {
+            type: "enabled" as const,
+            budget_tokens: thinkingBudget,
+          }
+        : undefined;
 
-    const toolChoice = tools?.length ? (
-      options.toolMode === vscode.LanguageModelChatToolMode.Required ? { type: "any" as const, disable_parallel_tool_use: true } : { type: "auto" as const }
-    ) : undefined;
+    const toolChoice = tools?.length
+      ? options.toolMode === vscode.LanguageModelChatToolMode.Required
+        ? { type: "any" as const, disable_parallel_tool_use: true }
+        : { type: "auto" as const }
+      : undefined;
 
     const stream = client.messages.stream({
       model: model.id,
@@ -232,13 +243,17 @@ export class AnthropicProvider extends BaseProvider {
 
   private flushToolCall(progress: vscode.Progress<vscode.LanguageModelResponsePart>, tracker: ToolCallTracker): void {
     try {
-      progress.report(new vscode.LanguageModelToolCallPart(tracker.toolId, tracker.name, JSON.parse(tracker.jsonInput || "{}")));
+      progress.report(
+        new vscode.LanguageModelToolCallPart(tracker.toolId, tracker.name, JSON.parse(tracker.jsonInput || "{}")),
+      );
     } catch {
       progress.report(new vscode.LanguageModelToolCallPart(tracker.toolId, tracker.name, {}));
     }
   }
 
-  private extractAnthropicMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Anthropic.MessageParam[] {
+  private extractAnthropicMessages(
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+  ): Anthropic.MessageParam[] {
     const mappedMessages: Anthropic.MessageParam[] = [];
 
     for (const message of messages) {
@@ -255,7 +270,9 @@ export class AnthropicProvider extends BaseProvider {
             type: "tool_result",
             tool_use_id: part.callId,
             content: part.content
-              .map((item) => (item instanceof vscode.LanguageModelTextPart ? { type: "text", text: item.value } : undefined))
+              .map((item) =>
+                item instanceof vscode.LanguageModelTextPart ? { type: "text", text: item.value } : undefined,
+              )
               .filter((item): item is Anthropic.TextBlockParam => item !== undefined),
           });
         } else if (part instanceof vscode.LanguageModelDataPart) {

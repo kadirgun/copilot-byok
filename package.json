@@ -13,10 +13,30 @@
     "AI"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:copilot-byok.formView"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "copilot-byok",
+          "title": "Copilot BYOK",
+          "icon": "media/copilot-byok-view.svg"
+        }
+      ]
+    },
+    "views": {
+      "copilot-byok": [
+        {
+          "id": "copilot-byok.formView",
+          "name": "Form",
+          "type": "webview",
+          "visibility": "visible"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "copilot-byok.addProvider",
