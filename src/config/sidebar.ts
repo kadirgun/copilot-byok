@@ -31,83 +31,79 @@ export class SidebarManager {
     return selected?.provider;
   }
 
-  private async promptApiKey(): Promise<string | undefined> {
-    return await vscode.window.showInputBox({
-      placeHolder: "sk-...",
-      prompt: "Enter API key",
-      ignoreFocusOut: true,
-    });
-  }
-
   private async collectProviderDetails(
     providers: ProviderConfig[],
     existingProvider?: ProviderConfig,
   ): Promise<{ type: ProviderType; name: string; baseURL?: string; apiKey?: string } | undefined> {
-    const typeField: ModalFormField[] = existingProvider
-      ? []
-      : [
-          {
-            id: "type",
-            type: "select",
-            label: "Provider Type",
-            required: true,
-            value: "openai",
-            options: [
-              { label: "OpenAI", value: "openai" },
-              { label: "Anthropic", value: "anthropic" },
-            ],
-          },
-        ];
+    const formFields: ModalFormField[] = [];
 
-    const submitted = await this.modalFormManager.showFormModal(
-      [
-        ...typeField,
-        {
-          id: "name",
-          type: "text",
-          label: "Provider Name",
-          required: true,
-          value: existingProvider?.name ?? "",
-          placeholder: "Provider name",
-          notIn: providers.filter((provider) => provider.id !== existingProvider?.id).map((provider) => provider.name),
-          messages: {
-            required: "Provider name is required",
-            notIn: "Provider name must be unique",
-          },
-        },
-        {
-          id: "baseURL",
-          type: "text",
-          label: "Base URL",
-          required: !existingProvider,
-          value: existingProvider?.baseURL ?? "",
-          placeholder: "https://api.example.com",
-          format: "url",
-          messages: {
-            required: "Please enter a valid URL",
-            format: "Please enter a valid URL",
-          },
-        },
-        {
-          id: "apiKey",
-          type: "text",
-          label: "API Key",
-          description: "Optional. Leave empty if you want to add it later.",
-          value: "",
-          placeholder: "sk-...",
-          password: true,
-          trim: false,
-        },
-      ],
+    if (!existingProvider) {
+      formFields.push({
+        id: "type",
+        type: "select",
+        label: "Provider Type",
+        required: true,
+        value: "openai",
+        options: [
+          { label: "OpenAI", value: "openai" },
+          { label: "Anthropic", value: "anthropic" },
+        ],
+      });
+    }
+
+    const apiKeyFormField: ModalFormField = {
+      id: "apiKey",
+      type: "text",
+      label: "API Key",
+      description: "Optional. Leave empty if you want to add it later.",
+      value: "",
+      placeholder: "sk-...",
+      password: true,
+      trim: false,
+    };
+
+    if (existingProvider) {
+      apiKeyFormField.value = await this.context.secrets.get(existingProvider.apiKeySecretKey);
+    }
+
+    formFields.push(
       {
-        title: existingProvider ? "Edit Provider" : "Add Provider",
-        description: existingProvider
-          ? `Update settings for ${existingProvider.name}`
-          : "Create a new OpenAI or Anthropic provider",
-        submitLabel: existingProvider ? "Save Changes" : "Add Provider",
-        cancelLabel: "Cancel",
+        id: "name",
+        type: "text",
+        label: "Provider Name",
+        required: true,
+        value: existingProvider?.name ?? "",
+        placeholder: "Provider name",
+        notIn: providers.filter((provider) => provider.id !== existingProvider?.id).map((provider) => provider.name),
+        messages: {
+          required: "Provider name is required",
+          notIn: "Provider name must be unique",
+        },
       },
+      {
+        id: "baseURL",
+        type: "text",
+        label: "Base URL",
+        required: !existingProvider,
+        value: existingProvider?.baseURL ?? "",
+        placeholder: "https://api.example.com",
+        format: "url",
+        messages: {
+          required: "Please enter a valid URL",
+          format: "Please enter a valid URL",
+        },
+      },
+      apiKeyFormField,
     );
+
+    const submitted = await this.modalFormManager.showFormModal(formFields, {
+      title: existingProvider ? "Edit Provider" : "Add Provider",
+      description: existingProvider
+        ? `Update settings for ${existingProvider.name}`
+        : "Create a new OpenAI or Anthropic provider",
+      submitLabel: existingProvider ? "Save Changes" : "Add Provider",
+      cancelLabel: "Cancel",
+    });
 
     if (!submitted) {
       return;
@@ -275,35 +271,13 @@ export class SidebarManager {
       return;
     }
 
-    const apiKeyAction = await vscode.window.showQuickPick(
-      [
-        { label: "Keep current API key", value: "keep" as const },
-        { label: "Update API key", value: "update" as const },
-        { label: "Delete API key", value: "delete" as const },
-      ],
-      { placeHolder: "Select API key action" },
-    );
-
-    if (!apiKeyAction) {
-      return;
-    }
-
     const providers = await this.configManager.loadProviders();
     const details = await this.collectProviderDetails(providers, existingProvider);
     if (!details) {
       return;
     }
 
-    if (apiKeyAction.value === "delete") {
-      await this.context.secrets.delete(existingProvider.apiKeySecretKey);
-    } else if (apiKeyAction.value === "update") {
-      const apiKey = await this.promptApiKey();
-      if (!apiKey) {
-        return;
-      }
-
-      await this.context.secrets.store(existingProvider.apiKeySecretKey, apiKey);
-    }
+    await this.context.secrets.store(existingProvider.apiKeySecretKey, details.apiKey ?? "");
 
     const updatedProvider: ProviderConfig = {
       ...existingProvider,
