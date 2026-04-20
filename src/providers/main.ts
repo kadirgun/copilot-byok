@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { ConfigManager } from "../config/manager";
-import type { QuickPickManager } from "../config/quickpick.js";
+import type { SidebarManager } from "../config/sidebar.js";
 import { type ProviderConfig } from "../types";
 import type { BaseProvider } from "./base";
 import { createProvider } from "./factory";
@@ -11,7 +11,7 @@ export class MainProvider implements vscode.LanguageModelChatProvider {
   constructor(
     private readonly context: vscode.ExtensionContext,
     protected configManager: ConfigManager,
-    protected quickPickManager: QuickPickManager,
+    protected sidebarManager: SidebarManager,
   ) {}
 
   async reload(configs: ProviderConfig[]): Promise<void> {

@@ -6,7 +6,7 @@ import type { ConfigManager } from "./manager";
 
 type ProviderType = "openai" | "anthropic";
 
-export class QuickPickManager {
+export class SidebarManager {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly configManager: ConfigManager,

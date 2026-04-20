@@ -2,6 +2,7 @@
   "name": "copilot-byok",
   "displayName": "Copilot BYOK",
   "description": "Add custom OpenAI and Anthropic providers to VS Code Copilot",
+  "icon": "copilot-byok.png",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.116.0"
@@ -13,13 +14,12 @@
     "AI"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:copilot-byok.formView"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "copilot-byok",
           "title": "Copilot BYOK",
@@ -33,7 +33,7 @@
           "id": "copilot-byok.formView",
           "name": "Form",
           "type": "webview",
-          "visibility": "visible"
+          "visibility": "hidden"
         }
       ]
     },

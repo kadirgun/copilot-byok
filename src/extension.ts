@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ConfigManager } from "./config/manager";
-import { QuickPickManager } from "./config/quickpick.js";
+import { SidebarManager } from "./config/sidebar.js";
 import { MainProvider } from "./providers/main";
 import { PROVIDER_VENDOR_ID } from "./types";
 import { ModalFormManager } from "./ui/modal-form.js";
@@ -8,8 +8,8 @@ import { ModalFormManager } from "./ui/modal-form.js";
 export function activate(context: vscode.ExtensionContext): void {
   const configManager = new ConfigManager(context);
   const modalFormManager = new ModalFormManager(context);
-  const quickPickManager = new QuickPickManager(context, configManager, modalFormManager);
-  const mainProvider = new MainProvider(context, configManager, quickPickManager);
+  const sidebarManager = new SidebarManager(context, configManager, modalFormManager);
+  const mainProvider = new MainProvider(context, configManager, sidebarManager);
   const emitter = new vscode.EventEmitter<void>();
 
   vscode.lm.registerLanguageModelChatProvider(PROVIDER_VENDOR_ID, {
@@ -28,30 +28,30 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("copilot-byok.addProvider", async () => {
-      const name = await quickPickManager.showAddProvider();
+      const name = await sidebarManager.showAddProvider();
       await refresh();
       if (name) {
         await vscode.commands.executeCommand("copilot-byok.addModel");
       }
     }),
     vscode.commands.registerCommand("copilot-byok.editProvider", async () => {
-      await quickPickManager.showEditProvider();
+      await sidebarManager.showEditProvider();
       await refresh();
     }),
     vscode.commands.registerCommand("copilot-byok.deleteProvider", async () => {
-      await quickPickManager.showDeleteProvider();
+      await sidebarManager.showDeleteProvider();
       await refresh();
     }),
     vscode.commands.registerCommand("copilot-byok.addModel", async () => {
-      await quickPickManager.showAddModel();
+      await sidebarManager.showAddModel();
       await refresh();
     }),
     vscode.commands.registerCommand("copilot-byok.removeModel", async () => {
-      await quickPickManager.showDeleteModel();
+      await sidebarManager.showDeleteModel();
       await refresh();
     }),
     vscode.commands.registerCommand("copilot-byok.editModel", async () => {
-      await quickPickManager.showEditModel();
+      await sidebarManager.showEditModel();
       await refresh();
     }),
   );
