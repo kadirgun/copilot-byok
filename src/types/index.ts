@@ -114,3 +114,10 @@ declare module "vscode" {
     readonly metadata?: Record<string, unknown>;
   }
 }
+
+declare module "@anthropic-ai/sdk/resources/index.mjs" {
+  export interface MessageDeltaUsage {
+    input_tokens: number;
+    output_tokens: number;
+  }
+}

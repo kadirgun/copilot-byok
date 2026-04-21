@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import * as vscode from "vscode";
 import type { ProviderConfig } from "../types";
+import { languageModelUsagePart } from "../utils/languageModelUsagePart";
 import { BaseProvider } from "./base";
 
 interface ToolCallTracker {
@@ -216,6 +217,10 @@ export class AnthropicProvider extends BaseProvider {
           pendingThinking.delete(chunk.index);
           emittedThinking.delete(chunk.index);
         }
+      } else if (chunk.type === "message_delta") {
+        if (chunk.usage) {
+          progress.report(languageModelUsagePart(chunk.usage.input_tokens, chunk.usage.output_tokens));
+        }
       }
     }
   }
@@ -225,15 +230,7 @@ export class AnthropicProvider extends BaseProvider {
     text: string | vscode.LanguageModelChatRequestMessage,
     _token: vscode.CancellationToken,
   ): Promise<number> {
-    const content =
-      typeof text === "string"
-        ? text
-        : text.content
-            .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-            .map((part) => part.value)
-            .join("");
-
-    return Math.ceil(content.length / 4);
+    return Math.ceil(text.toString().length / 4);
   }
 
   private getThinkingBudget(model: vscode.LanguageModelChatInformation): number | undefined {

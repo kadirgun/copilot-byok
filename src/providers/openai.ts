@@ -181,15 +181,7 @@ export class OpenAIProvider extends BaseProvider {
     text: string | vscode.LanguageModelChatRequestMessage,
     _token: vscode.CancellationToken,
   ): Promise<number> {
-    const content =
-      typeof text === "string"
-        ? text
-        : text.content
-            .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-            .map((part) => part.value)
-            .join("");
-
-    return Math.ceil(content.length / 4);
+    return Math.ceil(text.toString().length / 4);
   }
 
   private mapToolsToOpenAIFormat(tools: readonly vscode.LanguageModelChatTool[]): OpenAI.Chat.ChatCompletionTool[] {
