@@ -7,7 +7,7 @@ export class ConfigManager {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   async loadProviders(): Promise<ProviderConfig[]> {
-    return this.context.workspaceState.get<ProviderConfig[]>(PROVIDERS_KEY) ?? [];
+    return this.context.globalState.get<ProviderConfig[]>(PROVIDERS_KEY) ?? [];
   }
 
   async saveProvider(provider: ProviderConfig): Promise<void> {
@@ -29,7 +29,7 @@ export class ConfigManager {
       }
     }
 
-    await this.context.workspaceState.update(PROVIDERS_KEY, providers);
+    await this.context.globalState.update(PROVIDERS_KEY, providers);
   }
 
   async deleteProvider(selector: string): Promise<void> {
@@ -47,7 +47,7 @@ export class ConfigManager {
       }
     }
 
-    await this.context.workspaceState.update(
+    await this.context.globalState.update(
       PROVIDERS_KEY,
       providers.filter((p) => p.id !== provider.id),
     );

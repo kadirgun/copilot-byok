@@ -3,7 +3,7 @@
   "displayName": "Copilot BYOK",
   "description": "Add custom OpenAI and Anthropic providers to VS Code Copilot",
   "icon": "images/copilot-byok.png",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "kadirgun",
   "repository": {
     "url": "https://github.com/kadirgun/copilot-byok",
