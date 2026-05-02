@@ -302,7 +302,12 @@ export class AnthropicProvider extends BaseProvider {
       }
 
       if (content.length > 0) {
-        mappedMessages.push({ role, content });
+        const last = mappedMessages[mappedMessages.length - 1];
+        if (last && last.role === role) {
+          (last.content as Anthropic.ContentBlockParam[]).push(...content);
+        } else {
+          mappedMessages.push({ role, content });
+        }
       }
     }
 
