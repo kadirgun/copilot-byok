@@ -145,7 +145,6 @@ export class AnthropicProvider extends BaseProvider {
 
     const pendingToolCalls = new Map<number, ToolCallTracker>();
     const pendingThinking = new Map<number, ThinkingTracker>();
-    const emittedThinking = new Map<number, string>();
 
     for await (const chunk of stream) {
       if (token.isCancellationRequested) {
@@ -165,7 +164,9 @@ export class AnthropicProvider extends BaseProvider {
             signature: chunk.content_block.signature ?? "",
           });
         } else if (chunk.content_block.type === "redacted_thinking") {
-          progress.report(new vscode.LanguageModelThinkingPart("", { redactedData: chunk.content_block.data }));
+          const redactedPart = new vscode.LanguageModelThinkingPart("");
+          (redactedPart as unknown as { metadata: object }).metadata = { redactedData: chunk.content_block.data };
+          progress.report(redactedPart);
         }
       } else if (chunk.type === "content_block_delta") {
         if (chunk.delta.type === "text_delta") {
@@ -174,8 +175,7 @@ export class AnthropicProvider extends BaseProvider {
           const tracker = pendingThinking.get(chunk.index);
           if (tracker) {
             tracker.thinking += chunk.delta.thinking || "";
-            emittedThinking.set(chunk.index, tracker.thinking);
-            progress.report(new vscode.LanguageModelThinkingPart(chunk.delta.thinking || ""));
+            progress.report(new vscode.LanguageModelThinkingPart(tracker.thinking));
           }
         } else if (chunk.delta.type === "signature_delta") {
           const tracker = pendingThinking.get(chunk.index);
@@ -208,14 +208,13 @@ export class AnthropicProvider extends BaseProvider {
 
         const thinking = pendingThinking.get(chunk.index);
         if (thinking) {
-          const finalThinking = emittedThinking.get(chunk.index) ?? thinking.thinking;
-          const finalPart = new vscode.LanguageModelThinkingPart("", {
+          const finalPart = new vscode.LanguageModelThinkingPart("");
+          (finalPart as unknown as { metadata: object }).metadata = {
             signature: thinking.signature,
-            _completeThinking: finalThinking,
-          });
+            _completeThinking: thinking.thinking,
+          };
           progress.report(finalPart);
           pendingThinking.delete(chunk.index);
-          emittedThinking.delete(chunk.index);
         }
       } else if (chunk.type === "message_delta") {
         if (chunk.usage) {
@@ -296,6 +295,7 @@ export class AnthropicProvider extends BaseProvider {
             content.push({
               type: "thinking",
               thinking: metadata._completeThinking,
+              signature: metadata.signature,
             } as Anthropic.ThinkingBlockParam);
           }
         }
