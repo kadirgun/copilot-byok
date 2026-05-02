@@ -283,6 +283,21 @@ export class AnthropicProvider extends BaseProvider {
               },
             });
           }
+        } else if (part instanceof vscode.LanguageModelThinkingPart) {
+          const metadata = (
+            part as unknown as { metadata?: { signature?: string; redactedData?: string; _completeThinking?: string } }
+          ).metadata;
+          if (metadata?.redactedData !== undefined) {
+            content.push({
+              type: "redacted_thinking",
+              data: metadata.redactedData,
+            } as Anthropic.RedactedThinkingBlockParam);
+          } else if (metadata?.signature && metadata?._completeThinking) {
+            content.push({
+              type: "thinking",
+              thinking: metadata._completeThinking,
+            } as Anthropic.ThinkingBlockParam);
+          }
         }
       }
 
